@@ -19,9 +19,8 @@ import (
 )
 
 type screenshotArgs struct {
-	Namespace   string `json:"namespace"`
-	Name        string `json:"name"`
-	ExpectedUID string `json:"expected_uid"`
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
 }
 
 // screenshotBehavior lets each test control what the fake console_screenshot
@@ -95,7 +94,7 @@ func sampleTarget(uid types.UID) domain.Target {
 }
 
 var _ = Describe("Client.ValidateCapabilities", func() {
-	It("succeeds when console_screenshot is present and accepts expected_uid", func() {
+	It("succeeds when console_screenshot is present", func() {
 		session := startFakeConsoleMCP(true, func(args screenshotArgs) (*mcpsdk.CallToolResult, error) {
 			return imageResult(fakePNG(2, 2)), nil
 		})
@@ -111,22 +110,6 @@ var _ = Describe("Client.ValidateCapabilities", func() {
 
 		c := newClientFromSession(session, fakeIdentityReader{}, 0, 0)
 		Expect(c.ValidateCapabilities(context.Background())).To(HaveOccurred())
-	})
-})
-
-var _ = Describe("schemaAcceptsExpectedUID", func() {
-	It("accepts a schema whose properties include expected_uid", func() {
-		schema := map[string]any{"properties": map[string]any{"expected_uid": map[string]any{"type": "string"}}}
-		Expect(schemaAcceptsExpectedUID(schema)).To(BeTrue())
-	})
-
-	It("rejects a schema missing expected_uid", func() {
-		schema := map[string]any{"properties": map[string]any{"namespace": map[string]any{"type": "string"}}}
-		Expect(schemaAcceptsExpectedUID(schema)).To(BeFalse())
-	})
-
-	It("rejects a non-object schema", func() {
-		Expect(schemaAcceptsExpectedUID("not a schema")).To(BeFalse())
 	})
 })
 
@@ -166,7 +149,6 @@ var _ = Describe("Client.Screenshot", func() {
 			calls++
 			Expect(args.Namespace).To(Equal("payments"))
 			Expect(args.Name).To(Equal("checkout-7"))
-			Expect(args.ExpectedUID).To(Equal(string(uid)))
 			return imageResult(fakePNG(2, 2)), nil
 		})
 		defer session.Close()

@@ -72,28 +72,11 @@ func (c *Client) ValidateCapabilities(ctx context.Context) error {
 	}
 
 	for _, tool := range result.Tools {
-		if tool.Name != screenshotToolName {
-			continue
+		if tool.Name == screenshotToolName {
+			return nil
 		}
-		if !schemaAcceptsExpectedUID(tool.InputSchema) {
-			return fmt.Errorf("mcp: %s does not accept expected_uid", screenshotToolName)
-		}
-		return nil
 	}
 	return fmt.Errorf("mcp: %s tool not found", screenshotToolName)
-}
-
-func schemaAcceptsExpectedUID(schema any) bool {
-	obj, ok := schema.(map[string]any)
-	if !ok {
-		return false
-	}
-	props, ok := obj["properties"].(map[string]any)
-	if !ok {
-		return false
-	}
-	_, ok = props["expected_uid"]
-	return ok
 }
 
 func (c *Client) Screenshot(ctx context.Context, target domain.Target) (domain.Screenshot, error) {
@@ -133,9 +116,8 @@ func (c *Client) verifyIdentity(ctx context.Context, target domain.Target) error
 
 func (c *Client) callScreenshotTool(ctx context.Context, target domain.Target) (*mcpsdk.CallToolResult, error) {
 	args := map[string]any{
-		"namespace":    target.Namespace,
-		"name":         target.Name,
-		"expected_uid": string(target.UID),
+		"namespace": target.Namespace,
+		"name":      target.Name,
 	}
 
 	result, err := c.session.CallTool(ctx, &mcpsdk.CallToolParams{Name: screenshotToolName, Arguments: args})
