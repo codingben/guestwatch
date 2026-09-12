@@ -1,0 +1,166 @@
+# Render this file before applying it:
+#   NAMESPACE=my-vm-namespace MODEL_ID=your-model envsubst < deploy/guestwatch.yaml | kubectl apply -f -
+#
+# The console sidecar is reachable only inside this Pod. The AI agent and the
+# dashboard are the only components exposed through the Service.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: guestwatch
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: guestwatch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: guestwatch
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: guestwatch
+rules:
+  - apiGroups: ["kubevirt.io"]
+    resources: ["virtualmachineinstances"]
+    verbs: ["get", "list"]
+  - apiGroups: ["subresources.kubevirt.io"]
+    resources: ["virtualmachineinstances/vnc/screenshot"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: guestwatch
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: guestwatch
+subjects:
+  - kind: ServiceAccount
+    name: guestwatch
+    namespace: ${NAMESPACE}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: guestwatch
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guestwatch
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: guestwatch
+data:
+  config.yaml: |
+    scan:
+      namespaces: ["${NAMESPACE}"]
+      labelSelector: ""
+      interval: 30s
+      perNodeConcurrency: 1
+      classifierRPS: 2
+      classifierConcurrency: 5
+      firstPassDeadline: 45s
+    mcp:
+      # Plaintext HTTP is only allowed for loopback hosts (see
+      # config.Validate): this call never leaves the Pod's network
+      # namespace, so TLS termination on the sidecar would add complexity
+      # without a real confidentiality benefit.
+      consoleURL: "http://127.0.0.1:8081/mcp"
+    model:
+      classifier: "${MODEL_ID}"
+    privacy:
+      consoleEvidenceEgressAcknowledged: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: guestwatch
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: guestwatch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: guestwatch
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: guestwatch
+    spec:
+      serviceAccountName: guestwatch
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: ghcr.io/codingben/kubevirt-ai-agent:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - -config
+            - /etc/guestwatch/config.yaml
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: guestwatch-model
+                  key: api-key
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/guestwatch
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+        - name: console-mcp
+          image: ghcr.io/codingben/kubevirt-console-mcp:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - --http-addr=127.0.0.1:8081
+            - --insecure-http
+            - --insecure-skip-auth
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: config
+          configMap:
+            name: guestwatch
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: guestwatch
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: guestwatch
+spec:
+  selector:
+    app.kubernetes.io/name: guestwatch
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
