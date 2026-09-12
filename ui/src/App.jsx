@@ -34,7 +34,7 @@ const virtualMachines = [
 ];
 
 function MonitorIcon() {
-  return <svg className="brand-icon" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="currentColor"/><rect x="6" y="7" width="20" height="15" rx="3" fill="none" stroke="white" strokeWidth="2"/><circle cx="16" cy="14.5" r="3" fill="white"/><path d="M12 26h8" stroke="white" strokeWidth="2" strokeLinecap="round"/></svg>;
+  return <img className="brand-icon" src="/icon.svg" alt="" aria-hidden="true"/>;
 }
 
 export default function App() {
