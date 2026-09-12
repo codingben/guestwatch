@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -137,8 +138,8 @@ func (c Config) Validate() error {
 		return fmt.Errorf("mcp.consoleURL must not be empty")
 	}
 	u, err := url.Parse(c.MCP.ConsoleURL)
-	if err != nil || u.Scheme != "https" || u.Host == "" {
-		return fmt.Errorf("mcp.consoleURL must be a valid https URL")
+	if err != nil || u.Host == "" || !(u.Scheme == "https" || (u.Scheme == "http" && isLoopbackHost(u.Hostname()))) {
+		return fmt.Errorf("mcp.consoleURL must be a valid https URL (plain http is only allowed to a loopback host, e.g. the console-mcp sidecar)")
 	}
 
 	if c.Model.Classifier == "" {
@@ -153,4 +154,12 @@ func (c Config) Validate() error {
 	}
 
 	return nil
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

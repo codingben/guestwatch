@@ -33,6 +33,12 @@ var _ = Describe("config.Load", func() {
 		Expect(cfg.Scan.FirstPassDeadline).To(Equal(config.DefaultFirstPassDeadline))
 	})
 
+	It("accepts plain http to a loopback console URL", func() {
+		yaml := strings.Replace(validYAML, "https://kubevirt-console-mcp:8443/mcp", "http://127.0.0.1:8081/mcp", 1)
+		_, err := config.Load(strings.NewReader(yaml))
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	It("rejects unknown fields", func() {
 		_, err := config.Load(strings.NewReader(validYAML + "\nextra: true\n"))
 		Expect(err).To(HaveOccurred())
