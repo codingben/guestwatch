@@ -1,21 +1,35 @@
-.PHONY: build test test-race lint chart-lint chart-render
+BINARY_NAME    ?= kubevirt-ai-agent
+CMD_PATH       := ./cmd/kubevirt-ai-agent
+CONTAINER_TOOL ?= docker
+IMAGE_REGISTRY ?= ghcr.io/codingben
+IMAGE_NAME     ?= kubevirt-ai-agent
+IMAGE_TAG      ?= latest
+IMAGE          := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 
+.PHONY: build
 build:
-	go build ./...
+	go build -o $(BINARY_NAME) $(CMD_PATH)
 
+.PHONY: test
 test:
 	go test ./...
 
+.PHONY: test-race
 test-race:
 	go test -race ./...
 
+.PHONY: lint
 lint:
 	go vet ./...
 
-chart-lint:
-	helm lint charts/kubevirt-ai-agent
+.PHONY: image
+image:
+	$(CONTAINER_TOOL) build -t $(IMAGE) .
 
-chart-render:
-	helm template test charts/kubevirt-ai-agent --namespace test \
-		--set privacy.consoleEvidenceEgressAcknowledged=true \
-		--set model.classifier=test-model >/tmp/kubevirt-ai-agent-rendered.yaml
+.PHONY: image-push
+image-push:
+	$(CONTAINER_TOOL) push $(IMAGE)
+
+.PHONY: clean
+clean:
+	rm -f $(BINARY_NAME)
