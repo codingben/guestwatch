@@ -130,8 +130,6 @@ spec:
           imagePullPolicy: IfNotPresent
           args:
             - --http-addr=127.0.0.1:8081
-            - --insecure-http
-            - --insecure-skip-auth
           resources:
             requests:
               cpu: 50m
