@@ -17,7 +17,7 @@ import (
 const screenshotToolName = "console_screenshot"
 
 const (
-	DefaultMaxImageBytes  int64 = 8 * 1024 * 1024
+	DefaultMaxImageBytes  int64 = 4 * 1024 * 1024
 	DefaultMaxImagePixels int64 = 1920 * 1080 * 4
 )
 
