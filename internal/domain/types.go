@@ -88,6 +88,44 @@ type Screenshot struct {
 	CapturedAt time.Time
 }
 
+type Outcome string
+
+const (
+	OutcomeClassified Outcome = "classified"
+	OutcomeFailed     Outcome = "failed"
+)
+
+// Observation is one VMI's outcome from a single scan pass, fed to the
+// dashboard's Recorder.
+type Observation struct {
+	Namespace      string         `json:"namespace"`
+	Name           string         `json:"name"`
+	Node           string         `json:"node"`
+	UID            types.UID      `json:"uid"`
+	ScanID         string         `json:"scanId"`
+	ObservedAt     time.Time      `json:"observedAt"`
+	Outcome        Outcome        `json:"outcome"`
+	Classification Classification `json:"classification,omitempty"`
+	ReasonCode     ReasonCode     `json:"reasonCode,omitempty"`
+	Stage          Stage          `json:"stage,omitempty"`
+	ErrorCode      ErrorCode      `json:"errorCode,omitempty"`
+}
+
+// ScanRecord is the scan-level outcome exposed on the dashboard API,
+// mirroring the scan_complete log line.
+type ScanRecord struct {
+	ScanID     string    `json:"scanId"`
+	StartedAt  time.Time `json:"startedAt"`
+	DurationMS int64     `json:"durationMs"`
+	Namespaces int       `json:"namespaces"`
+	Selected   int       `json:"selected"`
+	Captured   int64     `json:"captured"`
+	Classified int64     `json:"classified"`
+	Skipped    int64     `json:"skipped"`
+	Errors     int64     `json:"errors"`
+	Overrun    bool      `json:"overrun"`
+}
+
 // ClassifyRequest is the sole input to a Classifier.
 type ClassifyRequest struct {
 	Target     Target

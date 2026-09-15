@@ -18,11 +18,22 @@ type ConsoleClient interface {
 	Screenshot(ctx context.Context, target domain.Target) (domain.Screenshot, error)
 }
 
+type Recorder interface {
+	RecordObservation(domain.Observation)
+	RecordScan(domain.ScanRecord)
+}
+
+type nopRecorder struct{}
+
+func (nopRecorder) RecordObservation(domain.Observation) {}
+func (nopRecorder) RecordScan(domain.ScanRecord)         {}
+
 type ScannerOptions struct {
 	VMIClient  VMIClient
 	Console    ConsoleClient
 	Classifier model.Classifier
 	Logger     *slog.Logger
+	Recorder   Recorder
 }
 
 type Scanner struct {
@@ -46,6 +57,10 @@ func NewScanner(cfg config.Config, deps ScannerOptions) (*Scanner, error) {
 			return nil, err
 		}
 		selector = parsed
+	}
+
+	if deps.Recorder == nil {
+		deps.Recorder = nopRecorder{}
 	}
 
 	return &Scanner{
@@ -82,6 +97,18 @@ func (s *Scanner) scanOnce(ctx context.Context) {
 		run.summary.Duration = time.Since(start)
 		run.summary.Overrun = run.summary.Duration >= s.cfg.Scan.Interval
 		run.logScanComplete()
+		run.deps.Recorder.RecordScan(domain.ScanRecord{
+			ScanID:     run.summary.ScanID,
+			StartedAt:  run.summary.StartedAt,
+			DurationMS: run.summary.Duration.Milliseconds(),
+			Namespaces: run.summary.Namespaces,
+			Selected:   run.summary.Selected,
+			Captured:   run.summary.Captured.Load(),
+			Classified: run.summary.Classified.Load(),
+			Skipped:    run.summary.Skipped.Load(),
+			Errors:     run.summary.Errors.Load(),
+			Overrun:    run.summary.Overrun,
+		})
 	}()
 
 	discovery := ListTargets(ctx, s.deps.VMIClient, s.cfg.Scan.Namespaces, s.selector)
@@ -142,7 +169,7 @@ func (r *scanRun) processTarget(ctx context.Context, target domain.Target, permi
 
 	<-permit
 	if err != nil {
-		r.fail(target.Namespace, string(target.UID), domain.StageScreenshot, errorCode(err))
+		r.failTarget(target, domain.StageScreenshot, errorCode(err))
 		return
 	}
 
@@ -151,7 +178,7 @@ func (r *scanRun) processTarget(ctx context.Context, target domain.Target, permi
 	r.summary.recordUsage(usage)
 
 	if err != nil {
-		r.fail(target.Namespace, string(target.UID), domain.StageClassifier, errorCode(err))
+		r.failTarget(target, domain.StageClassifier, errorCode(err))
 		return
 	}
 
@@ -161,6 +188,18 @@ func (r *scanRun) processTarget(ctx context.Context, target domain.Target, permi
 
 func (r *scanRun) record(target domain.Target, result domain.ClassificationResult, capturedAt time.Time) {
 	r.summary.recordClassification(result.Classification)
+
+	r.deps.Recorder.RecordObservation(domain.Observation{
+		Namespace:      target.Namespace,
+		Name:           target.Name,
+		Node:           target.Node,
+		UID:            target.UID,
+		ScanID:         r.summary.ScanID,
+		ObservedAt:     capturedAt,
+		Outcome:        domain.OutcomeClassified,
+		Classification: result.Classification,
+		ReasonCode:     result.ReasonCode,
+	})
 
 	switch result.Classification {
 	case domain.NoTargetFailureVisible:
@@ -175,6 +214,22 @@ func (r *scanRun) record(target domain.Target, result domain.ClassificationResul
 func (r *scanRun) fail(namespace, vmiUID string, stage domain.Stage, code domain.ErrorCode) {
 	r.logCoverageGap(namespace, vmiUID, stage, code)
 	r.summary.Errors.Add(1)
+}
+
+func (r *scanRun) failTarget(target domain.Target, stage domain.Stage, code domain.ErrorCode) {
+	r.fail(target.Namespace, string(target.UID), stage, code)
+
+	r.deps.Recorder.RecordObservation(domain.Observation{
+		Namespace:  target.Namespace,
+		Name:       target.Name,
+		Node:       target.Node,
+		UID:        target.UID,
+		ScanID:     r.summary.ScanID,
+		ObservedAt: time.Now(),
+		Outcome:    domain.OutcomeFailed,
+		Stage:      stage,
+		ErrorCode:  code,
+	})
 }
 
 func errorCode(err error) domain.ErrorCode {

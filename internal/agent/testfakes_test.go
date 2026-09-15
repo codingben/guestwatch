@@ -108,6 +108,34 @@ func (f *fakeClassifier) Classify(ctx context.Context, req domain.ClassifyReques
 	return f.result, domain.Usage{InputTokens: 1}, nil
 }
 
+type fakeRecorder struct {
+	mu           sync.Mutex
+	observations []domain.Observation
+	scans        []domain.ScanRecord
+}
+
+func (f *fakeRecorder) RecordObservation(obs domain.Observation) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.observations = append(f.observations, obs)
+}
+
+func (f *fakeRecorder) RecordScan(rec domain.ScanRecord) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.scans = append(f.scans, rec)
+}
+
+func (f *fakeRecorder) snapshot() ([]domain.Observation, []domain.ScanRecord) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	obs := make([]domain.Observation, len(f.observations))
+	copy(obs, f.observations)
+	scans := make([]domain.ScanRecord, len(f.scans))
+	copy(scans, f.scans)
+	return obs, scans
+}
+
 type logEntry struct {
 	level slog.Level
 	msg   string

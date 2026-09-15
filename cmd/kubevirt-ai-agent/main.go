@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -10,16 +11,17 @@ import (
 	"syscall"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"kubevirt.io/client-go/kubecli"
 
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/codingben/kubevirt-ai-agent/internal/agent"
 	"github.com/codingben/kubevirt-ai-agent/internal/config"
+	"github.com/codingben/kubevirt-ai-agent/internal/dashboard"
 	"github.com/codingben/kubevirt-ai-agent/internal/mcp"
 	"github.com/codingben/kubevirt-ai-agent/internal/model"
 )
@@ -32,7 +34,9 @@ func main() {
 }
 
 func run() error {
-	configPath := flag.String("config", "/etc/kubevirt-ai-agent/config.yaml", "path to the scan configuration file")
+	const defaultConfigPath = "/etc/kubevirt-ai-agent/config.yaml"
+
+	configPath := flag.String("config", defaultConfigPath, "path to the scan configuration file")
 	flag.Parse()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -42,12 +46,49 @@ func run() error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
+	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
+	runCtx, cancelRun := context.WithCancel(sigCtx)
+	defer cancelRun()
+
+	scanner, dashboardServer, err := buildServices(runCtx, cfg, logger)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("kubevirt-ai-agent starting",
+		"namespaces", cfg.Scan.Namespaces,
+		"interval", cfg.Scan.Interval.String(),
+		"dashboard_addr", cfg.Dashboard.Addr,
+		"dashboard_max_observations", cfg.Dashboard.MaxObservations,
+	)
+
+	var g errgroup.Group
+
+	g.Go(func() error {
+		defer cancelRun()
+		if err := scanner.Run(runCtx); !isShutdownErr(err) {
+			return fmt.Errorf("scanner: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		defer cancelRun()
+		if err := dashboardServer.Run(runCtx); !isShutdownErr(err) {
+			return fmt.Errorf("dashboard: %w", err)
+		}
+		return nil
+	})
+
+	return g.Wait()
+}
+
+func buildServices(ctx context.Context, cfg config.Config, logger *slog.Logger) (*agent.Scanner, *dashboard.Server, error) {
 	virtClient, err := getVirtClient()
 	if err != nil {
-		return fmt.Errorf("build kubevirt client: %w", err)
+		return nil, nil, fmt.Errorf("build kubevirt client: %w", err)
 	}
 
 	openaiClient := openai.NewClient(option.WithMaxRetries(0))
@@ -57,7 +98,7 @@ func run() error {
 		ConcurrentRequests: cfg.Scan.ClassifierConcurrency,
 	}, openaiClient)
 	if err != nil {
-		return fmt.Errorf("build classifier: %w", err)
+		return nil, nil, fmt.Errorf("build classifier: %w", err)
 	}
 
 	console, err := mcp.NewClient(ctx, mcp.ClientConfig{
@@ -66,28 +107,26 @@ func run() error {
 		MaxImagePixels: mcp.DefaultMaxImagePixels,
 	}, identityReader{client: virtClient})
 	if err != nil {
-		return fmt.Errorf("build console MCP client: %w", err)
+		return nil, nil, fmt.Errorf("build console MCP client: %w", err)
 	}
 
+	store := dashboard.NewStore(cfg.Dashboard.MaxObservations)
 	scanner, err := agent.NewScanner(cfg, agent.ScannerOptions{
 		VMIClient:  virtClient,
 		Console:    console,
 		Classifier: classifier,
 		Logger:     logger,
+		Recorder:   store,
 	})
 	if err != nil {
-		return fmt.Errorf("build scanner: %w", err)
+		return nil, nil, fmt.Errorf("build scanner: %w", err)
 	}
 
-	logger.Info("kubevirt-ai-agent starting",
-		"namespaces", cfg.Scan.Namespaces,
-		"interval", cfg.Scan.Interval.String(),
-	)
+	return scanner, dashboard.NewServer(cfg.Dashboard.Addr, store, logger), nil
+}
 
-	if err := scanner.Run(ctx); err != nil && ctx.Err() == nil {
-		return fmt.Errorf("scanner: %w", err)
-	}
-	return nil
+func isShutdownErr(err error) bool {
+	return err == nil || errors.Is(err, context.Canceled)
 }
 
 func loadConfig(path string) (config.Config, error) {
@@ -100,16 +139,11 @@ func loadConfig(path string) (config.Config, error) {
 }
 
 func getVirtClient() (kubecli.KubevirtClient, error) {
-	restConfig, err := rest.InClusterConfig()
+	restConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{},
+	).ClientConfig()
 	if err != nil {
-		kubeconfigPath := os.Getenv("KUBECONFIG")
-		if kubeconfigPath == "" {
-			kubeconfigPath = clientcmd.RecommendedHomeFile
-		}
-		restConfig, err = clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-		if err != nil {
-			return nil, fmt.Errorf("no in-cluster config and no usable kubeconfig: %w", err)
-		}
+		return nil, fmt.Errorf("no usable kubeconfig and no in-cluster config: %w", err)
 	}
 	return kubecli.GetKubevirtClientFromRESTConfig(restConfig)
 }

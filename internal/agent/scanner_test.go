@@ -9,6 +9,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
@@ -208,6 +211,101 @@ var _ = Describe("Scanner", func() {
 		sc := findLog(entries(), "scan_complete")[0]
 		Expect(sc.attrs["errors"]).To(BeNumerically("==", 5))
 		Expect(sc.attrs["classified"]).To(BeNumerically("==", 0))
+	})
+
+	It("records one observation per classified target, including healthy ones", func() {
+		vmi := eligibleVMI("ns-a", "vmi-1", "node-1", "uid-1")
+		client := singleNamespaceClient(vmi)
+		console := &fakeConsole{}
+		classifier := &fakeClassifier{result: domain.ClassificationResult{
+			Classification: domain.NoTargetFailureVisible,
+			ReasonCode:     domain.NoFailureVisible,
+		}}
+		logger, entries := newCaptureLogger()
+		recorder := &fakeRecorder{}
+
+		scanner, err := agent.NewScanner(baseScanConfig(), agent.ScannerOptions{
+			VMIClient: client, Console: console, Classifier: classifier, Logger: logger, Recorder: recorder,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		go scanner.Run(ctx)
+
+		Eventually(func() []logEntry { return findLog(entries(), "scan_complete") }, "5s").Should(HaveLen(1))
+
+		obs, scans := recorder.snapshot()
+		Expect(obs).To(HaveLen(1))
+		Expect(obs[0].Outcome).To(Equal(domain.OutcomeClassified))
+		Expect(obs[0].Classification).To(Equal(domain.NoTargetFailureVisible))
+		Expect(obs[0].Namespace).To(Equal("ns-a"))
+		Expect(obs[0].Name).To(Equal("vmi-1"))
+		Expect(scans).To(HaveLen(1))
+		Expect(scans[0].Selected).To(Equal(1))
+		Expect(scans[0].Classified).To(BeNumerically("==", 1))
+	})
+
+	It("records no observation for a namespace-scoped discovery failure", func() {
+		client := &fakeVMIClient{byNamespace: map[string]*fakeVMIInterface{
+			"ns-a": {listFunc: func(ctx context.Context, opts metav1.ListOptions) (*kubevirtv1.VirtualMachineInstanceList, error) {
+				return nil, k8serrors.NewForbidden(schema.GroupResource{Resource: "virtualmachineinstances"}, "", errors.New("no rbac"))
+			}},
+		}}
+		console := &fakeConsole{}
+		classifier := &fakeClassifier{}
+		logger, entries := newCaptureLogger()
+		recorder := &fakeRecorder{}
+
+		scanner, err := agent.NewScanner(baseScanConfig(), agent.ScannerOptions{
+			VMIClient: client, Console: console, Classifier: classifier, Logger: logger, Recorder: recorder,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		go scanner.Run(ctx)
+
+		Eventually(func() []logEntry { return findLog(entries(), "scan_complete") }, "5s").Should(HaveLen(1))
+
+		// A namespace-scoped discovery failure has no VMI identity to key
+		// an observation by, so unlike a per-target failure it must not
+		// reach the Recorder even though it does still count as a
+		// coverage gap and a scan error.
+		gaps := findLog(entries(), "coverage_gap")
+		Expect(gaps).To(HaveLen(1))
+		Expect(gaps[0].attrs["stage"]).To(Equal(string(domain.StageDiscovery)))
+
+		obs, scans := recorder.snapshot()
+		Expect(obs).To(BeEmpty())
+		Expect(scans).To(HaveLen(1))
+		Expect(scans[0].Errors).To(BeNumerically("==", 1))
+	})
+
+	It("records one failed observation per screenshot failure", func() {
+		vmi := eligibleVMI("ns-a", "vmi-1", "node-1", "uid-1")
+		client := singleNamespaceClient(vmi)
+		console := &fakeConsole{err: errors.New("console unavailable")}
+		classifier := &fakeClassifier{}
+		logger, entries := newCaptureLogger()
+		recorder := &fakeRecorder{}
+
+		scanner, err := agent.NewScanner(baseScanConfig(), agent.ScannerOptions{
+			VMIClient: client, Console: console, Classifier: classifier, Logger: logger, Recorder: recorder,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		go scanner.Run(ctx)
+
+		Eventually(func() []logEntry { return findLog(entries(), "scan_complete") }, "5s").Should(HaveLen(1))
+
+		obs, _ := recorder.snapshot()
+		Expect(obs).To(HaveLen(1))
+		Expect(obs[0].Outcome).To(Equal(domain.OutcomeFailed))
+		Expect(obs[0].Stage).To(Equal(domain.StageScreenshot))
+		Expect(classifier.calls()).To(Equal(0))
 	})
 
 	It("rejects deps missing a required collaborator", func() {

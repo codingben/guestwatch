@@ -57,11 +57,19 @@ type PrivacyConfig struct {
 	ConsoleEvidenceEgressAcknowledged bool `yaml:"consoleEvidenceEgressAcknowledged"`
 }
 
+type DashboardConfig struct {
+	Addr            string `yaml:"addr"`
+	MaxObservations int    `yaml:"maxObservations"`
+}
+
+const DefaultDashboardAddr = ":8080"
+
 type Config struct {
-	Scan    ScanConfig    `yaml:"scan"`
-	MCP     MCPConfig     `yaml:"mcp"`
-	Model   ModelConfig   `yaml:"model"`
-	Privacy PrivacyConfig `yaml:"privacy"`
+	Scan      ScanConfig      `yaml:"scan"`
+	MCP       MCPConfig       `yaml:"mcp"`
+	Model     ModelConfig     `yaml:"model"`
+	Privacy   PrivacyConfig   `yaml:"privacy"`
+	Dashboard DashboardConfig `yaml:"dashboard"`
 }
 
 func Load(r io.Reader) (Config, error) {
@@ -94,6 +102,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Scan.FirstPassDeadline == 0 {
 		c.Scan.FirstPassDeadline = DefaultFirstPassDeadline
+	}
+	if c.Dashboard.Addr == "" {
+		c.Dashboard.Addr = DefaultDashboardAddr
 	}
 }
 
@@ -151,6 +162,15 @@ func (c Config) Validate() error {
 
 	if !c.Privacy.ConsoleEvidenceEgressAcknowledged {
 		return fmt.Errorf("privacy.consoleEvidenceEgressAcknowledged must be true: screenshots leave the cluster for the configured model provider")
+	}
+
+	if c.Dashboard.Addr != "" {
+		if _, _, err := net.SplitHostPort(c.Dashboard.Addr); err != nil {
+			return fmt.Errorf("dashboard.addr is invalid: %w", err)
+		}
+	}
+	if c.Dashboard.MaxObservations < 0 {
+		return fmt.Errorf("dashboard.maxObservations must not be negative")
 	}
 
 	return nil

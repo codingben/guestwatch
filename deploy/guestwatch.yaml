@@ -69,6 +69,8 @@ data:
       classifier: "${MODEL_ID}"
     privacy:
       consoleEvidenceEgressAcknowledged: true
+    dashboard:
+      maxObservations: 10000
 ---
 apiVersion: apps/v1
 kind: Deployment

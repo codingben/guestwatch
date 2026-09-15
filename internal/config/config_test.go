@@ -68,4 +68,42 @@ var _ = Describe("config.Load", func() {
 		_, err := config.Load(strings.NewReader(yaml))
 		Expect(err).To(HaveOccurred())
 	})
+
+	It("defaults dashboard.addr when it is not set", func() {
+		cfg, err := config.Load(strings.NewReader(validYAML))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Dashboard.Addr).To(Equal(config.DefaultDashboardAddr))
+	})
+
+	It("accepts an explicit dashboard.addr", func() {
+		yaml := validYAML + "\ndashboard:\n  addr: \"127.0.0.1:9090\"\n"
+		cfg, err := config.Load(strings.NewReader(yaml))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Dashboard.Addr).To(Equal("127.0.0.1:9090"))
+	})
+
+	It("rejects a malformed dashboard.addr", func() {
+		yaml := validYAML + "\ndashboard:\n  addr: \"not-a-host-port\"\n"
+		_, err := config.Load(strings.NewReader(yaml))
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("accepts dashboard.maxObservations left at zero (the store's own default applies)", func() {
+		cfg, err := config.Load(strings.NewReader(validYAML))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Dashboard.MaxObservations).To(Equal(0))
+	})
+
+	It("accepts an explicit dashboard.maxObservations", func() {
+		yaml := validYAML + "\ndashboard:\n  maxObservations: 5000\n"
+		cfg, err := config.Load(strings.NewReader(yaml))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Dashboard.MaxObservations).To(Equal(5000))
+	})
+
+	It("rejects a negative dashboard.maxObservations", func() {
+		yaml := validYAML + "\ndashboard:\n  maxObservations: -1\n"
+		_, err := config.Load(strings.NewReader(yaml))
+		Expect(err).To(HaveOccurred())
+	})
 })
