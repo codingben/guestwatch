@@ -126,6 +126,8 @@ func (f *fakeRecorder) RecordScan(rec domain.ScanRecord) {
 	f.scans = append(f.scans, rec)
 }
 
+func (f *fakeRecorder) Prune([]string, map[string]struct{}) {}
+
 func (f *fakeRecorder) snapshot() ([]domain.Observation, []domain.ScanRecord) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

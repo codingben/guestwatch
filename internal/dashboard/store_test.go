@@ -128,6 +128,31 @@ var _ = Describe("Store", func() {
 		Expect(fresh.LastScan.ScanID).To(Equal("scan-1"))
 	})
 
+	It("prunes an entry whose namespace was listed but no longer contains it", func() {
+		store := dashboard.NewStore(10)
+		now := time.Now()
+		store.RecordObservation(classifiedObservation("ns-a", "vmi-1", now))
+		store.RecordObservation(classifiedObservation("ns-a", "vmi-2", now))
+
+		store.Prune([]string{"ns-a"}, map[string]struct{}{"ns-a/vmi-2": {}})
+
+		snap := store.Snapshot()
+		Expect(snap.Observations).To(HaveLen(1))
+		Expect(snap.Observations[0].Name).To(Equal("vmi-2"))
+	})
+
+	It("leaves a namespace untouched when it is absent from listedNamespaces", func() {
+		store := dashboard.NewStore(10)
+		now := time.Now()
+		store.RecordObservation(classifiedObservation("ns-a", "vmi-1", now))
+
+		// A namespace that failed to list this pass contributes no keys to
+		// live; pruning it anyway would wrongly evict every entry in it.
+		store.Prune([]string{"ns-b"}, map[string]struct{}{})
+
+		Expect(store.Snapshot().Observations).To(HaveLen(1))
+	})
+
 	It("does not panic under concurrent reads and writes", func() {
 		store := dashboard.NewStore(50)
 		var wg sync.WaitGroup

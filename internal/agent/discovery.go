@@ -24,15 +24,19 @@ type NamespaceFailure struct {
 type DiscoveryResult struct {
 	Targets  []domain.Target
 	Failures []NamespaceFailure
+
+	ListedNamespaces []string
+	Live             map[string]struct{}
 }
 
 func ListTargets(ctx context.Context, client VMIClient, namespaces []string, selector labels.Selector) DiscoveryResult {
-	var result DiscoveryResult
+	result := DiscoveryResult{Live: make(map[string]struct{})}
 
 	for _, ns := range namespaces {
 		var targets []domain.Target
 		var discoveryPageLimit int64 = 500
 		var continueToken string
+		failed := false
 
 		for {
 			opts := metav1.ListOptions{
@@ -51,11 +55,13 @@ func ListTargets(ctx context.Context, client VMIClient, namespaces []string, sel
 					Code:      classifyListError(ctx, err),
 				})
 				targets = nil
+				failed = true
 				break
 			}
 
 			for i := range list.Items {
 				vmi := &list.Items[i]
+				result.Live[domain.VMIKey(vmi.Namespace, vmi.Name)] = struct{}{}
 				if !domain.Eligible(vmi) {
 					continue
 				}
@@ -72,6 +78,9 @@ func ListTargets(ctx context.Context, client VMIClient, namespaces []string, sel
 			}
 		}
 		result.Targets = append(result.Targets, targets...)
+		if !failed {
+			result.ListedNamespaces = append(result.ListedNamespaces, ns)
+		}
 	}
 
 	return result

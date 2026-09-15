@@ -49,7 +49,7 @@ func NewStore(max int) *Store {
 }
 
 func (s *Store) RecordObservation(obs domain.Observation) {
-	key := vmiKey(obs.Namespace, obs.Name)
+	key := domain.VMIKey(obs.Namespace, obs.Name)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -79,6 +79,28 @@ func (s *Store) RecordScan(rec domain.ScanRecord) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lastScan = &rec
+}
+
+func (s *Store) Prune(listedNamespaces []string, live map[string]struct{}) {
+	if len(listedNamespaces) == 0 {
+		return
+	}
+	listed := make(map[string]struct{}, len(listedNamespaces))
+	for _, ns := range listedNamespaces {
+		listed[ns] = struct{}{}
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for key, e := range s.byVMI {
+		if _, ok := listed[e.Namespace]; !ok {
+			continue
+		}
+		if _, ok := live[key]; !ok {
+			delete(s.byVMI, key)
+		}
+	}
 }
 
 func (s *Store) Snapshot() Snapshot {
@@ -127,8 +149,4 @@ func (s *Store) evictOldestLocked() {
 		}
 	}
 	delete(s.byVMI, oldestKey)
-}
-
-func vmiKey(namespace, name string) string {
-	return namespace + "/" + name
 }

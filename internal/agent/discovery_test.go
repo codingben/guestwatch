@@ -41,6 +41,42 @@ var _ = Describe("agent.ListTargets", func() {
 		Expect(names).To(ConsistOf("a-vmi", "b-vmi"))
 	})
 
+	It("reports an ineligible VMI as live so its dashboard entry is not pruned", func() {
+		client := &fakeVMIClient{byNamespace: map[string]*fakeVMIInterface{
+			"ns-a": {listFunc: func(ctx context.Context, opts metav1.ListOptions) (*kubevirtv1.VirtualMachineInstanceList, error) {
+				paused := eligibleVMI("ns-a", "c-vmi", "node-1", "uid-c")
+				paused.Status.Conditions = []kubevirtv1.VirtualMachineInstanceCondition{
+					{Type: kubevirtv1.VirtualMachineInstancePaused, Status: "True"},
+				}
+				return &kubevirtv1.VirtualMachineInstanceList{Items: []kubevirtv1.VirtualMachineInstance{paused}}, nil
+			}},
+		}}
+
+		result := agent.ListTargets(context.Background(), client, []string{"ns-a"}, labels.Everything())
+		Expect(result.Targets).To(BeEmpty(), "the paused VMI is ineligible for capture")
+		Expect(result.Live).To(HaveKey("ns-a/c-vmi"), "but it still exists, so it must not be pruned from the dashboard")
+	})
+
+	It("lists namespaces fully populate ListedNamespaces and Live", func() {
+		client := &fakeVMIClient{byNamespace: map[string]*fakeVMIInterface{
+			"ns-a": {listFunc: func(ctx context.Context, opts metav1.ListOptions) (*kubevirtv1.VirtualMachineInstanceList, error) {
+				return &kubevirtv1.VirtualMachineInstanceList{
+					Items: []kubevirtv1.VirtualMachineInstance{eligibleVMI("ns-a", "vmi-1", "node-1", "uid-1")},
+				}, nil
+			}},
+			"ns-b": {listFunc: func(ctx context.Context, opts metav1.ListOptions) (*kubevirtv1.VirtualMachineInstanceList, error) {
+				return &kubevirtv1.VirtualMachineInstanceList{
+					Items: []kubevirtv1.VirtualMachineInstance{eligibleVMI("ns-b", "vmi-2", "node-2", "uid-2")},
+				}, nil
+			}},
+		}}
+
+		result := agent.ListTargets(context.Background(), client, []string{"ns-a", "ns-b"}, labels.Everything())
+		Expect(result.ListedNamespaces).To(ConsistOf("ns-a", "ns-b"))
+		Expect(result.Live).To(HaveKey("ns-a/vmi-1"))
+		Expect(result.Live).To(HaveKey("ns-b/vmi-2"))
+	})
+
 	It("paginates using the continue token", func() {
 		page1 := &kubevirtv1.VirtualMachineInstanceList{
 			ListMeta: metav1.ListMeta{Continue: "page-2"},
@@ -84,6 +120,7 @@ var _ = Describe("agent.ListTargets", func() {
 		Expect(result.Failures[0].Code).To(Equal(domain.ErrListExpired))
 		Expect(result.Targets).To(HaveLen(1))
 		Expect(result.Targets[0].Namespace).To(Equal("ns-b"))
+		Expect(result.ListedNamespaces).To(ConsistOf("ns-b"), "ns-a failed to list and must be excluded, or pruning would wrongly evict its entries")
 	})
 
 	It("isolates a permission failure in one namespace: outer namespaces are unaffected (C1)", func() {

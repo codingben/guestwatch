@@ -3,6 +3,7 @@ package agent_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/codingben/kubevirt-ai-agent/internal/agent"
+	"github.com/codingben/kubevirt-ai-agent/internal/dashboard"
 	"github.com/codingben/kubevirt-ai-agent/internal/domain"
 )
 
@@ -280,6 +282,44 @@ var _ = Describe("Scanner", func() {
 		Expect(obs).To(BeEmpty())
 		Expect(scans).To(HaveLen(1))
 		Expect(scans[0].Errors).To(BeNumerically("==", 1))
+	})
+
+	It("removes a dashboard entry once its VMI is deleted", func() {
+		var mu sync.Mutex
+		items := []kubevirtv1.VirtualMachineInstance{eligibleVMI("ns-a", "vmi-1", "node-1", "uid-1")}
+		client := &fakeVMIClient{byNamespace: map[string]*fakeVMIInterface{
+			"ns-a": {listFunc: func(ctx context.Context, opts metav1.ListOptions) (*kubevirtv1.VirtualMachineInstanceList, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				return &kubevirtv1.VirtualMachineInstanceList{Items: items}, nil
+			}},
+		}}
+		console := &fakeConsole{}
+		classifier := &fakeClassifier{result: domain.ClassificationResult{
+			Classification: domain.NoTargetFailureVisible,
+			ReasonCode:     domain.NoFailureVisible,
+		}}
+		logger, _ := newCaptureLogger()
+		store := dashboard.NewStore(10)
+		cfg := baseScanConfig()
+		cfg.Scan.Interval = 20 * time.Millisecond
+
+		scanner, err := agent.NewScanner(cfg, agent.ScannerOptions{
+			VMIClient: client, Console: console, Classifier: classifier, Logger: logger, Recorder: store,
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		go scanner.Run(ctx)
+
+		Eventually(func() int { return len(store.Snapshot().Observations) }, "2s").Should(Equal(1))
+
+		mu.Lock()
+		items = nil
+		mu.Unlock()
+
+		Eventually(func() int { return len(store.Snapshot().Observations) }, "2s").Should(Equal(0))
 	})
 
 	It("records one failed observation per screenshot failure", func() {

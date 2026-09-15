@@ -21,12 +21,15 @@ type ConsoleClient interface {
 type Recorder interface {
 	RecordObservation(domain.Observation)
 	RecordScan(domain.ScanRecord)
+
+	Prune(listedNamespaces []string, live map[string]struct{})
 }
 
 type nopRecorder struct{}
 
 func (nopRecorder) RecordObservation(domain.Observation) {}
 func (nopRecorder) RecordScan(domain.ScanRecord)         {}
+func (nopRecorder) Prune([]string, map[string]struct{})  {}
 
 type ScannerOptions struct {
 	VMIClient  VMIClient
@@ -112,6 +115,8 @@ func (s *Scanner) scanOnce(ctx context.Context) {
 	}()
 
 	discovery := ListTargets(ctx, s.deps.VMIClient, s.cfg.Scan.Namespaces, s.selector)
+
+	s.deps.Recorder.Prune(discovery.ListedNamespaces, discovery.Live)
 
 	for _, f := range discovery.Failures {
 		run.fail(f.Namespace, "", f.Stage, f.Code)

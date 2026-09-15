@@ -178,3 +178,10 @@ func Eligible(vmi *kubevirtv1.VirtualMachineInstance) bool {
 	}
 	return true
 }
+
+// VMIKey is the sole definition of the string identity used to correlate a
+// VMI across discovery and the dashboard store: both must agree on this
+// format for pruning of deleted VMIs to work.
+func VMIKey(namespace, name string) string {
+	return namespace + "/" + name
+}
