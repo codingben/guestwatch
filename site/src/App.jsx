@@ -8,8 +8,8 @@ const vms = [
 ];
 
 const installSteps = [
-  {title:'Prepare your model credentials',note:<>Save your API key in <code>api-key.txt</code>.</>,code:'kubectl -n images create secret generic guestwatch-model \\\n+  --from-file=api-key=./api-key.txt'},
-  {title:'Render and apply the deployment',note:<>Set <code>NAMESPACE</code> and <code>MODEL_ID</code>, then render the template before applying it.</>,code:'NAMESPACE=images MODEL_ID=your-model \\\n+  envsubst < deploy/guestwatch.yaml | kubectl apply -f -'},
+  {title:'Prepare your model credentials',note:<>Save your API key in <code>api-key.txt</code>.</>,code:'kubectl -n images create secret generic guestwatch-model --from-file=api-key=./api-key.txt'},
+  {title:'Render and apply the deployment',note:<>Set <code>NAMESPACE</code> and <code>MODEL_ID</code>, then render the template before applying it.</>,code:'NAMESPACE=images MODEL_ID=your-model envsubst < deploy/guestwatch.yaml | kubectl apply -f -'},
   {title:'Open the local dashboard',code:'kubectl -n images port-forward svc/guestwatch 8080:80',after:<>After deployment, visit <code>http://localhost:8080</code>. Viewing stored observations does not trigger an AI request.</>}
 ];
 
