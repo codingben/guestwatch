@@ -27,7 +27,25 @@ const (
 	DefaultClassifierRPS         = 2.0
 	DefaultClassifierConcurrency = 5
 	DefaultFirstPassDeadline     = 45 * time.Second
+
+	// DefaultWorkerCount is the number of goroutines pulling targets off
+	// the per-pass queue. It bounds how many screenshot captures can be
+	// in flight at once, independent of ClassifierConcurrency.
+	DefaultWorkerCount = 10
+
+	// DefaultKubeAPIBurst matches client-go's own historical default, so
+	// leaving it unset preserves today's behavior. Raise it together with
+	// WorkerCount when scaling past a few hundred VMIs: every screenshot
+	// makes two API calls (an identity check plus the VNC subresource
+	// fetch), so throughput here caps out well before ClassifierRPS does
+	// at fleet scale.
+	DefaultKubeAPIBurst = 10
 )
+
+// DefaultKubeAPIQPS matches client-go's own historical default; see
+// DefaultKubeAPIBurst. Typed as float32, matching ScanConfig.KubeAPIQPS, so
+// callers never need a conversion.
+const DefaultKubeAPIQPS float32 = 5.0
 
 // ScanConfig controls discovery, scheduling, and capacity.
 type ScanConfig struct {
@@ -43,6 +61,14 @@ type ScanConfig struct {
 	ClassifierRPS         float64       `yaml:"classifierRPS"`
 	ClassifierConcurrency int           `yaml:"classifierConcurrency"`
 	FirstPassDeadline     time.Duration `yaml:"firstPassDeadline"`
+
+	// WorkerCount, KubeAPIQPS, and KubeAPIBurst are the other half of the
+	// capacity formula: WorkerCount bounds concurrent screenshot capture,
+	// and KubeAPIQPS/KubeAPIBurst bound the rate of the underlying
+	// Kubernetes/KubeVirt API calls those captures make.
+	WorkerCount  int     `yaml:"workerCount"`
+	KubeAPIQPS   float32 `yaml:"kubeAPIQPS"`
+	KubeAPIBurst int     `yaml:"kubeAPIBurst"`
 }
 
 type MCPConfig struct {
@@ -103,6 +129,15 @@ func (c *Config) applyDefaults() {
 	if c.Scan.FirstPassDeadline == 0 {
 		c.Scan.FirstPassDeadline = DefaultFirstPassDeadline
 	}
+	if c.Scan.WorkerCount == 0 {
+		c.Scan.WorkerCount = DefaultWorkerCount
+	}
+	if c.Scan.KubeAPIQPS == 0 {
+		c.Scan.KubeAPIQPS = DefaultKubeAPIQPS
+	}
+	if c.Scan.KubeAPIBurst == 0 {
+		c.Scan.KubeAPIBurst = DefaultKubeAPIBurst
+	}
 	if c.Dashboard.Addr == "" {
 		c.Dashboard.Addr = DefaultDashboardAddr
 	}
@@ -143,6 +178,15 @@ func (c Config) Validate() error {
 	}
 	if c.Scan.FirstPassDeadline <= 0 {
 		return fmt.Errorf("scan.firstPassDeadline must be positive")
+	}
+	if c.Scan.WorkerCount < 1 {
+		return fmt.Errorf("scan.workerCount must be at least 1")
+	}
+	if c.Scan.KubeAPIQPS <= 0 {
+		return fmt.Errorf("scan.kubeAPIQPS must be positive")
+	}
+	if c.Scan.KubeAPIBurst < 1 {
+		return fmt.Errorf("scan.kubeAPIBurst must be at least 1")
 	}
 
 	if c.MCP.ConsoleURL == "" {

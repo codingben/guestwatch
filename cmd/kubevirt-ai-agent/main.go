@@ -86,7 +86,7 @@ func run() error {
 }
 
 func buildServices(ctx context.Context, cfg config.Config, logger *slog.Logger) (*agent.Scanner, *dashboard.Server, error) {
-	virtClient, err := getVirtClient()
+	virtClient, err := getVirtClient(cfg)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build kubevirt client: %w", err)
 	}
@@ -138,13 +138,17 @@ func loadConfig(path string) (config.Config, error) {
 	return config.Load(f)
 }
 
-func getVirtClient() (kubecli.KubevirtClient, error) {
+func getVirtClient(cfg config.Config) (kubecli.KubevirtClient, error) {
 	restConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientcmd.NewDefaultClientConfigLoadingRules(), &clientcmd.ConfigOverrides{},
 	).ClientConfig()
 	if err != nil {
 		return nil, fmt.Errorf("no usable kubeconfig and no in-cluster config: %w", err)
 	}
+
+	restConfig.QPS = cfg.Scan.KubeAPIQPS
+	restConfig.Burst = cfg.Scan.KubeAPIBurst
+
 	return kubecli.GetKubevirtClientFromRESTConfig(restConfig)
 }
 

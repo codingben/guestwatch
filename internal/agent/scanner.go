@@ -146,8 +146,7 @@ func (r *scanRun) process(ctx context.Context, targets []domain.Target) {
 	close(queue)
 
 	var wg sync.WaitGroup
-	var workerCount = 10
-	for range workerCount {
+	for range r.cfg.Scan.WorkerCount {
 		wg.Go(func() {
 			for target := range queue {
 				if ctx.Err() != nil {

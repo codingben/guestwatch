@@ -31,6 +31,9 @@ var _ = Describe("config.Load", func() {
 		Expect(cfg.Scan.ClassifierRPS).To(Equal(config.DefaultClassifierRPS))
 		Expect(cfg.Scan.ClassifierConcurrency).To(Equal(config.DefaultClassifierConcurrency))
 		Expect(cfg.Scan.FirstPassDeadline).To(Equal(config.DefaultFirstPassDeadline))
+		Expect(cfg.Scan.WorkerCount).To(Equal(config.DefaultWorkerCount))
+		Expect(cfg.Scan.KubeAPIQPS).To(Equal(config.DefaultKubeAPIQPS))
+		Expect(cfg.Scan.KubeAPIBurst).To(Equal(config.DefaultKubeAPIBurst))
 	})
 
 	It("accepts plain http to a loopback console URL", func() {

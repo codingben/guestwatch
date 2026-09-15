@@ -59,6 +59,14 @@ data:
       classifierRPS: 2
       classifierConcurrency: 5
       firstPassDeadline: 45s
+      #
+      # Worker Count, KubeAPI QPS, and KubeAPI burst bound screenshot capture
+      # concurrency and the Kubernetes/KubeVirt API call rate it drives (each
+      # screenshot makes two API calls).
+      #
+      workerCount: 10
+      kubeAPIQPS: 5
+      kubeAPIBurst: 10
     mcp:
       # Plaintext HTTP is only allowed for loopback hosts (see
       # config.Validate): this call never leaves the Pod's network
