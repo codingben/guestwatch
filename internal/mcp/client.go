@@ -116,8 +116,9 @@ func (c *Client) verifyIdentity(ctx context.Context, target domain.Target) error
 
 func (c *Client) callScreenshotTool(ctx context.Context, target domain.Target) (*mcpsdk.CallToolResult, error) {
 	args := map[string]any{
-		"namespace": target.Namespace,
-		"name":      target.Name,
+		"namespace":   target.Namespace,
+		"name":        target.Name,
+		"wake_screen": true,
 	}
 
 	result, err := c.session.CallTool(ctx, &mcpsdk.CallToolParams{Name: screenshotToolName, Arguments: args})

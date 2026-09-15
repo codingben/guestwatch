@@ -19,8 +19,9 @@ import (
 )
 
 type screenshotArgs struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
+	Namespace  string `json:"namespace"`
+	Name       string `json:"name"`
+	WakeScreen bool   `json:"wake_screen,omitempty"`
 }
 
 // screenshotBehavior lets each test control what the fake console_screenshot
@@ -149,6 +150,7 @@ var _ = Describe("Client.Screenshot", func() {
 			calls++
 			Expect(args.Namespace).To(Equal("payments"))
 			Expect(args.Name).To(Equal("checkout-7"))
+			Expect(args.WakeScreen).To(BeTrue())
 			return imageResult(fakePNG(2, 2)), nil
 		})
 		defer session.Close()
