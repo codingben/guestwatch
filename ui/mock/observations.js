@@ -70,8 +70,6 @@ function failed(namespace, name, node, uid, offsetSeconds, stage, errorCode) {
   };
 }
 
-// Edit this directly to try different fleet sizes/mixes; lastScan's counts
-// below derive from it, so they stay in sync automatically.
 const OBSERVATIONS = [
   classified(
     "vdi",
@@ -204,5 +202,234 @@ export function buildMockObservations() {
       overrun: false,
     },
     observations: OBSERVATIONS,
+    triageEnabled: true,
   };
 }
+
+const TRIAGE_RESULT_FIXTURES = {
+  "vdi/win11-build-042": {
+    suspectedCause: "WINDOWS_BSOD",
+    confidence: "HIGH",
+    summary:
+      'The current graphical console still shows a Windows "Blue Screen of Death" stop error. The persisted console log confirms the guest rebooted into automatic repair immediately beforehand, consistent with the automated classifier\'s finding.',
+    keyEvidence: [
+      "console_screenshot: stop code IRQL_NOT_LESS_OR_EQUAL still on screen",
+      "console_log: guest logged a bugcheck and an automatic-repair boot entry moments before the screenshot",
+    ],
+    nextSteps: [
+      "Check for a recently installed driver or Windows update around the bugcheck time",
+      "Boot into WinRE to review the minidump if guest access is available",
+    ],
+    toolsUsed: ["console_screenshot", "console_log"],
+    toolCallCount: 2,
+    durationMs: 4200,
+    usage: { inputTokens: 5210, outputTokens: 340, reasoningTokens: 780 },
+  },
+  "batch/rhel-worker-03": {
+    suspectedCause: "STORAGE_FAILURE",
+    confidence: "HIGH",
+    summary:
+      'The persisted console log shows a Linux kernel panic ("VFS: Unable to mount root fs on unknown-block(0,0)") shortly after boot, and the current screenshot still shows the same panic text. The root filesystem never became available, which points at the underlying storage rather than the kernel itself.',
+    keyEvidence: [
+      'console_log: "Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)"',
+      "console_screenshot confirms the panic text is still displayed",
+    ],
+    nextSteps: [
+      "Check whether the VM's root disk PVC is still bound and healthy",
+      "Review any recent change to the VM's boot disk, image, or kernel command line",
+    ],
+    toolsUsed: ["console_log", "console_screenshot"],
+    toolCallCount: 2,
+    durationMs: 3100,
+    usage: { inputTokens: 4180, outputTokens: 312, reasoningTokens: 640 },
+  },
+  "vdi/win10-vdi-014": {
+    suspectedCause: "BOOT_FAILURE",
+    confidence: "MEDIUM",
+    summary:
+      "The graphical console shows a black screen with a single dialog reporting a missing boot configuration entry, rather than a full stop-error screen. console_log returned no data for this guest, so this assessment is based on the screenshot alone.",
+    keyEvidence: [
+      'console_screenshot: "Windows failed to start" boot-configuration error dialog',
+      "console_log: SERIAL_DISABLED -- no persisted serial console configured for this guest",
+    ],
+    nextSteps: [
+      "Verify the VM's boot order and EFI/BCD configuration",
+      "Enable a serial console on this VM to capture more detail on the next failure",
+    ],
+    toolsUsed: ["console_screenshot", "console_log"],
+    toolCallCount: 2,
+    durationMs: 2600,
+    usage: { inputTokens: 3120, outputTokens: 210, reasoningTokens: 410 },
+  },
+  "batch/rhel-app-22": {
+    suspectedCause: "KERNEL_PANIC",
+    confidence: "HIGH",
+    summary:
+      'A live capture of the serial console confirms the guest is still repeatedly printing the same oops trace ("Unable to handle kernel NULL pointer dereference") and has not progressed in the last 5 seconds of output. The persisted log shows the same trace starting shortly after boot.',
+    keyEvidence: [
+      "console_capture: guest is looping the same oops trace with no new output",
+      'console_log: "Unable to handle kernel NULL pointer dereference at 0000000000000018"',
+      "console_screenshot matches the captured trace",
+    ],
+    nextSteps: [
+      "Capture and review the full oops trace for the faulting module or driver",
+      "Roll back any kernel or module update applied to this image before the crash",
+    ],
+    toolsUsed: ["console_log", "console_capture", "console_screenshot"],
+    toolCallCount: 4,
+    durationMs: 6800,
+    usage: { inputTokens: 7460, outputTokens: 455, reasoningTokens: 1120 },
+  },
+  "vdi/debian-app-07": {
+    suspectedCause: "GUEST_HUNG",
+    confidence: "MEDIUM",
+    summary:
+      "The scan's own screenshot attempt timed out, so no classification was ever made. A live capture now shows the console is active but has not printed any new output in 5 seconds, and the graphical console is static. This looks like a hung guest rather than a transient screenshot failure.",
+    keyEvidence: [
+      "console_capture: no new serial output over a 5-second window",
+      "console_screenshot: cursor and screen contents unchanged from the previous poll",
+    ],
+    nextSteps: [
+      "Check the guest's CPU and I/O wait metrics for signs of a stall",
+      "Consider a graceful restart if the guest does not recover on its own",
+    ],
+    toolsUsed: ["console_capture", "console_screenshot"],
+    toolCallCount: 2,
+    durationMs: 5200,
+    usage: { inputTokens: 4890, outputTokens: 298, reasoningTokens: 560 },
+  },
+  "batch/centos-batch-02": {
+    suspectedCause: "OUT_OF_MEMORY",
+    confidence: "MEDIUM",
+    summary:
+      "The scan's screenshot was blank, which matched the automated classifier's UNKNOWN result. The persisted console log shows the kernel's OOM killer terminated several processes just before the screen went blank, which explains the blank console better than a rendering glitch would.",
+    keyEvidence: [
+      'console_log: "Out of memory: Killed process ... (java)" repeated three times',
+      "console_screenshot: still blank, consistent with the guest's display service having been killed",
+    ],
+    nextSteps: [
+      "Review the guest's memory limits and recent workload for a leak or spike",
+      "Consider raising the VM's memory allocation if this recurs",
+    ],
+    toolsUsed: ["console_log", "console_screenshot"],
+    toolCallCount: 2,
+    durationMs: 3400,
+    usage: { inputTokens: 3980, outputTokens: 264, reasoningTokens: 520 },
+  },
+  "vdi/fedora-qa-09": {
+    suspectedCause: "NO_FAILURE_FOUND",
+    confidence: "HIGH",
+    summary:
+      "The classifier flagged this screenshot as ambiguous because the capture appears cropped, cutting off part of the screen. The persisted console log shows only routine login-prompt activity with no errors, and a fresh screenshot shows the same login prompt in full. This looks like a capture artifact, not a guest failure.",
+    keyEvidence: [
+      "console_log: routine systemd and login-prompt messages only, no errors",
+      "console_screenshot (retaken): full login prompt visible, not cropped",
+    ],
+    nextSteps: [
+      "No action needed for the guest; if cropped screenshots recur, check the console MCP server's capture geometry",
+    ],
+    toolsUsed: ["console_log", "console_screenshot"],
+    toolCallCount: 2,
+    durationMs: 2900,
+    usage: { inputTokens: 3540, outputTokens: 238, reasoningTokens: 380 },
+  },
+  "batch/rhel-build-018": {
+    suspectedCause: "NO_FAILURE_FOUND",
+    confidence: "HIGH",
+    summary:
+      "Both the current screenshot and the persisted console log show the guest running normally at a shell prompt, with no error or crash text anywhere in the recent log. This confirms the automated classifier's finding.",
+    keyEvidence: [
+      "console_screenshot: guest at an interactive shell prompt",
+      "console_log: no errors or warnings in the last 500 lines",
+    ],
+    nextSteps: ["No action needed"],
+    toolsUsed: ["console_screenshot", "console_log"],
+    toolCallCount: 2,
+    durationMs: 2400,
+    usage: { inputTokens: 3210, outputTokens: 190, reasoningTokens: 260 },
+  },
+  "batch/ubuntu-ci-11": {
+    suspectedCause: "NO_FAILURE_FOUND",
+    confidence: "MEDIUM",
+    summary:
+      "The current screenshot shows the guest at a normal login prompt. console_log could not be read for this guest, so this assessment is based on the screenshot alone.",
+    keyEvidence: [
+      "console_screenshot: normal login prompt, no visible errors",
+      "console_log: SERIAL_DISABLED -- no persisted serial console configured for this guest",
+    ],
+    nextSteps: [
+      "No action needed; enable a serial console here for higher-confidence checks in the future",
+    ],
+    toolsUsed: ["console_screenshot", "console_log"],
+    toolCallCount: 2,
+    durationMs: 2100,
+    usage: { inputTokens: 2680, outputTokens: 175, reasoningTokens: 210 },
+  },
+  "vdi/fedora-dev-01": {
+    suspectedCause: "INDETERMINATE",
+    confidence: "LOW",
+    summary:
+      "The current screenshot came back blank and console_log returned no data for this guest. It is not possible to confirm whether the guest is healthy from this alone, and this VM's last classification is now over 10 minutes old.",
+    keyEvidence: [
+      "console_screenshot: blank output",
+      "console_log: SERIAL_DISABLED -- no persisted serial console configured for this guest",
+    ],
+    nextSteps: [
+      "Enable a serial console on this VM so a future investigation has more to go on",
+      "Re-run the investigation after the next scan captures a fresh screenshot",
+    ],
+    toolsUsed: ["console_screenshot", "console_log"],
+    toolCallCount: 2,
+    durationMs: 1800,
+    usage: { inputTokens: 2210, outputTokens: 140, reasoningTokens: 160 },
+  },
+  "vdi/ubuntu-dev-03": {
+    suspectedCause: "NO_FAILURE_FOUND",
+    confidence: "MEDIUM",
+    summary:
+      "The current screenshot shows the guest at a normal desktop session. The persisted console log is quiet, with no crash or panic text, though this VM's last classification is now over 10 minutes old.",
+    keyEvidence: [
+      "console_screenshot: normal desktop session",
+      "console_log: no errors in the last 500 lines",
+    ],
+    nextSteps: ["No action needed"],
+    toolsUsed: ["console_screenshot", "console_log"],
+    toolCallCount: 2,
+    durationMs: 2300,
+    usage: { inputTokens: 2890, outputTokens: 182, reasoningTokens: 240 },
+  },
+};
+
+const TRIAGE_ERROR_FIXTURES = {
+  "batch/suse-batch-05": "TIMEOUT",
+};
+
+export function buildMockTriageRecord(namespace, name) {
+  const key = `${namespace}/${name}`;
+  const base = {
+    namespace,
+    name,
+    uid: "mock-uid",
+    requestedAt: new Date().toISOString(),
+  };
+
+  const errorCode = TRIAGE_ERROR_FIXTURES[key];
+  if (errorCode) {
+    return {
+      ...base,
+      durationMs: 90000,
+      usage: { inputTokens: 6200, outputTokens: 0, reasoningTokens: 0 },
+      errorCode,
+    };
+  }
+
+  const { durationMs, usage, ...result } =
+    TRIAGE_RESULT_FIXTURES[key] ??
+    TRIAGE_RESULT_FIXTURES["batch/rhel-worker-03"];
+  return { ...base, durationMs, usage, result };
+}
+
+OBSERVATIONS[0].lastTriage = buildMockTriageRecord(
+  OBSERVATIONS[0].namespace,
+  OBSERVATIONS[0].name,
+);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -32,6 +32,7 @@ const ERROR_TEXT = {
   MALFORMED_RESPONSE: 'the console service returned an unexpected response.',
   EVIDENCE_LIMIT: 'the screenshot exceeded the configured size limit.',
   LIST_EXPIRED: 'the list of VMs expired before it could be fully read.',
+  CANCELLED: 'the investigation was stopped.',
 };
 
 function timeAgo(date) {
@@ -49,6 +50,83 @@ async function fetchObservations(signal) {
   const res = await fetch('/api/observations', { signal });
   if (!res.ok) throw new Error(`dashboard API returned ${res.status}`);
   return res.json();
+}
+
+// Mirrors internal/domain.SuspectedCause.
+const TRIAGE_CAUSE = {
+  KERNEL_PANIC: { label: 'Kernel panic', tone: 'red' },
+  WINDOWS_BSOD: { label: 'Windows BSOD', tone: 'red' },
+  BOOT_FAILURE: { label: 'Boot failure', tone: 'red' },
+  STORAGE_FAILURE: { label: 'Storage failure', tone: 'red' },
+  OUT_OF_MEMORY: { label: 'Out of memory', tone: 'amber' },
+  GUEST_HUNG: { label: 'Guest hung', tone: 'amber' },
+  NO_FAILURE_FOUND: { label: 'No failure found', tone: 'green' },
+  INDETERMINATE: { label: 'Indeterminate', tone: 'gray' },
+};
+
+// Mirrors internal/domain.Confidence.
+const TRIAGE_CONFIDENCE_TEXT = { LOW: 'Low confidence', MEDIUM: 'Medium confidence', HIGH: 'High confidence' };
+
+// Mirrors internal/domain.TriageTool.
+const TRIAGE_TOOL_TEXT = {
+  console_screenshot: 'console screenshot',
+  console_log: 'console log',
+  console_capture: 'live console capture',
+};
+
+async function postTriage(namespace, name, signal) {
+  const url = `/api/vms/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/triage`;
+  const res = await fetch(url, { method: 'POST', signal });
+  if (!res.ok) {
+    if (res.status === 429) throw new Error('too many investigations are already running; try again shortly');
+    if (res.status === 404) throw new Error('this VM is no longer being observed');
+    throw new Error(`triage API returned ${res.status}`);
+  }
+  return res.json();
+}
+
+function useTriage() {
+  const [byKey, setByKey] = useState({});
+  const controllersRef = useRef({});
+
+  useEffect(() => {
+    const controllers = controllersRef.current;
+    return () => {
+      Object.values(controllers).forEach((c) => c.abort());
+    };
+  }, []);
+
+  const start = useCallback((namespace, name, key) => {
+    controllersRef.current[key]?.abort();
+
+    const controller = new AbortController();
+    controllersRef.current[key] = controller;
+
+    setByKey((prev) => ({ ...prev, [key]: { status: 'running', startedAt: new Date() } }));
+
+    postTriage(namespace, name, controller.signal)
+      .then((record) => {
+        setByKey((prev) => ({ ...prev, [key]: { status: 'done', record } }));
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        setByKey((prev) => ({ ...prev, [key]: { status: 'error', error: err } }));
+      })
+      .finally(() => {
+        if (controllersRef.current[key] === controller) delete controllersRef.current[key];
+      });
+  }, []);
+
+  const stop = useCallback((namespace, name, key) => {
+    controllersRef.current[key]?.abort();
+    delete controllersRef.current[key];
+    setByKey((prev) => ({ ...prev, [key]: { status: 'idle' } }));
+
+    const url = `/api/vms/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/triage`;
+    fetch(url, { method: 'DELETE' }).catch(() => {});
+  }, []);
+
+  return [byKey, start, stop];
 }
 
 // A failed poll keeps previously loaded data and only sets `error`, so a
@@ -328,9 +406,124 @@ function ScanSummary({ lastScan, suspectedNow }) {
   );
 }
 
+function SpinnerIcon() {
+  return (
+    <svg className="spinner-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeOpacity=".25" />
+      <path fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" d="M21 12a9 9 0 0 0-9-9" />
+    </svg>
+  );
+}
+
+function SparkleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 2.7c.32 0 .6.22.68.53l1.14 4.53 4.53 1.14c.31.08.53.36.53.68s-.22.6-.53.68l-4.53 1.14-1.14 4.53a.7.7 0 0 1-1.36 0l-1.14-4.53-4.53-1.14a.7.7 0 0 1 0-1.36l4.53-1.14 1.14-4.53c.08-.31.36-.53.68-.53Z"
+      />
+      <path
+        fill="currentColor"
+        d="M19 14.2c.27 0 .5.18.58.44l.5 1.78 1.78.5a.6.6 0 0 1 0 1.16l-1.78.5-.5 1.78a.6.6 0 0 1-1.16 0l-.5-1.78-1.78-.5a.6.6 0 0 1 0-1.16l1.78-.5.5-1.78c.08-.26.31-.44.58-.44Z"
+      />
+    </svg>
+  );
+}
+
+function TriageResult({ record }) {
+  if (record.errorCode) {
+    return (
+      <div className="triage-result red">
+        <div className="triage-result-title">
+          <span className="triage-result-title-icon">{TONE_ICON.red}</span>
+          <span className="triage-result-title-text">Investigation report</span>
+        </div>
+        <p className="triage-error-banner" role="alert">
+          Investigation failed: {ERROR_TEXT[record.errorCode] ?? 'an unspecified error occurred.'}
+        </p>
+      </div>
+    );
+  }
+
+  const result = record.result;
+  const cause = TRIAGE_CAUSE[result.suspectedCause] ?? TRIAGE_CAUSE.INDETERMINATE;
+  const toolsText = (result.toolsUsed ?? []).map(t => TRIAGE_TOOL_TEXT[t] ?? t).join(', ');
+
+  return (
+    <div className={`triage-result ${cause.tone}`}>
+      <div className="triage-result-title">
+        <span className="triage-result-title-icon">{TONE_ICON[cause.tone]}</span>
+        <span className="triage-result-title-text">Investigation report</span>
+      </div>
+      <div className="triage-result-header">
+        <span className={`status-badge ${cause.tone}`}>{cause.label}</span>
+        <span className="status-badge gray">{TRIAGE_CONFIDENCE_TEXT[result.confidence] ?? result.confidence}</span>
+      </div>
+      <div className="triage-report-body">
+        <p className="triage-summary">{result.summary}</p>
+        {result.keyEvidence?.length > 0 && (
+          <>
+            <h4>Key evidence</h4>
+            <ul className="triage-list">
+              {result.keyEvidence.map((item, i) => <li key={i}>{item}</li>)}
+            </ul>
+          </>
+        )}
+        {result.nextSteps?.length > 0 && (
+          <>
+            <h4>Suggested next steps</h4>
+            <ul className="triage-list">
+              {result.nextSteps.map((item, i) => <li key={i}>{item}</li>)}
+            </ul>
+          </>
+        )}
+        <p className="triage-tools-used">
+          Investigated using {result.toolCallCount} tool call{result.toolCallCount === 1 ? '' : 's'}
+          {toolsText && <>: {toolsText}</>}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function TriageSection({ triageEnabled, namespace, name, triage, lastTriage, onInvestigate, onStop }) {
+  if (!triageEnabled) return null;
+
+  const status = triage?.status ?? (lastTriage ? 'done' : 'idle');
+  const running = status === 'running';
+  const record = triage?.record ?? lastTriage;
+  // CLOCK_TICK_MS re-renders App every second, which re-renders this via
+  // props, so this recomputes without its own timer.
+  const elapsedSeconds = running ? Math.max(0, Math.round((Date.now() - triage.startedAt.getTime()) / 1000)) : 0;
+
+  return (
+    <div className="triage-section">
+      <h3 className="detail-section-title">AI Investigation</h3>
+      <p className="triage-description">
+        Run a deeper, tool-assisted investigation of this VM's console with AI.
+      </p>
+      <button
+        type="button"
+        className={running ? 'triage-button triage-button--stop' : 'triage-button'}
+        onClick={running ? onStop : onInvestigate}
+      >
+        {running ? <SpinnerIcon /> : <SparkleIcon />}
+        {running ? `Stop investigation (${elapsedSeconds}s)` : 'Investigate'}
+      </button>
+      {status === 'error' && (
+        <p className="triage-error-banner" role="alert">
+          Investigation failed: {triage.error.message}.
+        </p>
+      )}
+      {status === 'done' && <TriageResult record={record} />}
+    </div>
+  );
+}
+
 export default function App() {
   useClockTick(CLOCK_TICK_MS);
   const { data, error, loading, lastUpdatedAt } = useObservations(POLL_INTERVAL_MS);
+  const [triageByKey, startTriage, stopTriage] = useTriage();
   const vms = useViewModel(data);
   const [selectedKey, setSelectedKey] = useState(null);
   const [filterKey, setFilterKey] = useState('all');
@@ -496,6 +689,16 @@ export default function App() {
                         <p>{findingText(selected.current)}</p>
                       </div>
                     </div>
+
+                    <TriageSection
+                      triageEnabled={data?.triageEnabled}
+                      namespace={selected.entry.namespace}
+                      name={selected.entry.name}
+                      triage={triageByKey[selected.key]}
+                      lastTriage={selected.entry.lastTriage}
+                      onInvestigate={() => startTriage(selected.entry.namespace, selected.entry.name, selected.key)}
+                      onStop={() => stopTriage(selected.entry.namespace, selected.entry.name, selected.key)}
+                    />
                   </div>
                 ) : (
                   <div className="empty-state">{emptyText}</div>
