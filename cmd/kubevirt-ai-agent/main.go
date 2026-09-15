@@ -62,6 +62,7 @@ func run() error {
 		"interval", cfg.Scan.Interval.String(),
 		"dashboard_addr", cfg.Dashboard.Addr,
 		"dashboard_max_observations", cfg.Dashboard.MaxObservations,
+		"dashboard_static_dir", cfg.Dashboard.StaticDir,
 	)
 
 	var g errgroup.Group
@@ -122,7 +123,7 @@ func buildServices(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		return nil, nil, fmt.Errorf("build scanner: %w", err)
 	}
 
-	return scanner, dashboard.NewServer(cfg.Dashboard.Addr, store, logger), nil
+	return scanner, dashboard.NewServer(cfg.Dashboard.Addr, cfg.Dashboard.StaticDir, store, logger), nil
 }
 
 func isShutdownErr(err error) bool {

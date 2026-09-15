@@ -47,6 +47,11 @@ const (
 // callers never need a conversion.
 const DefaultKubeAPIQPS float32 = 5.0
 
+const (
+	DefaultDashboardAddr      = ":8080"
+	DefaultDashboardStaticDir = "/opt/guestwatch/ui"
+)
+
 // ScanConfig controls discovery, scheduling, and capacity.
 type ScanConfig struct {
 	Namespaces         []string      `yaml:"namespaces"`
@@ -86,9 +91,11 @@ type PrivacyConfig struct {
 type DashboardConfig struct {
 	Addr            string `yaml:"addr"`
 	MaxObservations int    `yaml:"maxObservations"`
-}
 
-const DefaultDashboardAddr = ":8080"
+	// StaticDir is the on-disk directory the built frontend is served
+	// from; not embedded into the binary.
+	StaticDir string `yaml:"staticDir"`
+}
 
 type Config struct {
 	Scan      ScanConfig      `yaml:"scan"`
@@ -140,6 +147,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Dashboard.Addr == "" {
 		c.Dashboard.Addr = DefaultDashboardAddr
+	}
+	if c.Dashboard.StaticDir == "" {
+		c.Dashboard.StaticDir = DefaultDashboardStaticDir
 	}
 }
 

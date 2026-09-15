@@ -10,6 +10,10 @@ IMAGE          := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 build:
 	go build -o $(BINARY_NAME) $(CMD_PATH)
 
+.PHONY: ui-build
+ui-build:
+	cd ui && npm ci && npm run build
+
 .PHONY: test
 test:
 	go test ./...

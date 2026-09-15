@@ -109,4 +109,17 @@ var _ = Describe("config.Load", func() {
 		_, err := config.Load(strings.NewReader(yaml))
 		Expect(err).To(HaveOccurred())
 	})
+
+	It("defaults dashboard.staticDir to where the Dockerfile places the built UI", func() {
+		cfg, err := config.Load(strings.NewReader(validYAML))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Dashboard.StaticDir).To(Equal(config.DefaultDashboardStaticDir))
+	})
+
+	It("accepts an explicit dashboard.staticDir", func() {
+		yaml := validYAML + "\ndashboard:\n  staticDir: \"/custom/ui\"\n"
+		cfg, err := config.Load(strings.NewReader(yaml))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Dashboard.StaticDir).To(Equal("/custom/ui"))
+	})
 })

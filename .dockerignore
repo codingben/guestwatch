@@ -1,0 +1,7 @@
+.git
+kubevirt-ai-agent
+*.test
+
+ui/node_modules
+ui/dist
+site
