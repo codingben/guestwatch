@@ -78,6 +78,7 @@ type ScanConfig struct {
 
 type MCPConfig struct {
 	ConsoleURL string `yaml:"consoleURL"`
+	WakeScreen *bool  `yaml:"wakeScreen"`
 }
 
 type ModelConfig struct {
@@ -150,6 +151,10 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Dashboard.StaticDir == "" {
 		c.Dashboard.StaticDir = DefaultDashboardStaticDir
+	}
+	if c.MCP.WakeScreen == nil {
+		wakeScreen := true
+		c.MCP.WakeScreen = &wakeScreen
 	}
 }
 

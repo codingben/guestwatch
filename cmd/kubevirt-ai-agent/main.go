@@ -106,6 +106,7 @@ func buildServices(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		ConsoleURL:     cfg.MCP.ConsoleURL,
 		MaxImageBytes:  mcp.DefaultMaxImageBytes,
 		MaxImagePixels: mcp.DefaultMaxImagePixels,
+		WakeScreen:     *cfg.MCP.WakeScreen,
 	}, identityReader{client: virtClient})
 	if err != nil {
 		return nil, nil, fmt.Errorf("build console MCP client: %w", err)

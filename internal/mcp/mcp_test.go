@@ -101,7 +101,7 @@ var _ = Describe("Client.ValidateCapabilities", func() {
 		})
 		defer session.Close()
 
-		c := newClientFromSession(session, fakeIdentityReader{}, 0, 0)
+		c := newClientFromSession(session, fakeIdentityReader{}, 0, 0, true)
 		Expect(c.ValidateCapabilities(context.Background())).To(Succeed())
 	})
 
@@ -109,7 +109,7 @@ var _ = Describe("Client.ValidateCapabilities", func() {
 		session := startFakeConsoleMCP(false, nil)
 		defer session.Close()
 
-		c := newClientFromSession(session, fakeIdentityReader{}, 0, 0)
+		c := newClientFromSession(session, fakeIdentityReader{}, 0, 0, true)
 		Expect(c.ValidateCapabilities(context.Background())).To(HaveOccurred())
 	})
 })
@@ -118,7 +118,7 @@ var _ = Describe("Client.Screenshot", func() {
 	const uid = types.UID("abc-123")
 
 	It("re-validates identity before capture and rejects a UID mismatch as stale", func() {
-		c := newClientFromSession(nil, fakeIdentityReader{vmi: eligibleVMI("different-uid", "node-1")}, 0, 0)
+		c := newClientFromSession(nil, fakeIdentityReader{vmi: eligibleVMI("different-uid", "node-1")}, 0, 0, true)
 		_, err := c.Screenshot(context.Background(), sampleTarget(uid))
 		Expect(err).To(HaveOccurred())
 		var te *domain.TargetError
@@ -129,7 +129,7 @@ var _ = Describe("Client.Screenshot", func() {
 	It("rejects a target that is no longer eligible", func() {
 		vmi := eligibleVMI(uid, "node-1")
 		vmi.Status.Phase = kubevirtv1.Succeeded
-		c := newClientFromSession(nil, fakeIdentityReader{vmi: vmi}, 0, 0)
+		c := newClientFromSession(nil, fakeIdentityReader{vmi: vmi}, 0, 0, true)
 		_, err := c.Screenshot(context.Background(), sampleTarget(uid))
 		var te *domain.TargetError
 		Expect(errors.As(err, &te)).To(BeTrue())
@@ -137,7 +137,7 @@ var _ = Describe("Client.Screenshot", func() {
 	})
 
 	It("surfaces a GetVMI failure as a permission error", func() {
-		c := newClientFromSession(nil, fakeIdentityReader{err: errors.New("forbidden")}, 0, 0)
+		c := newClientFromSession(nil, fakeIdentityReader{err: errors.New("forbidden")}, 0, 0, true)
 		_, err := c.Screenshot(context.Background(), sampleTarget(uid))
 		var te *domain.TargetError
 		Expect(errors.As(err, &te)).To(BeTrue())
@@ -155,11 +155,23 @@ var _ = Describe("Client.Screenshot", func() {
 		})
 		defer session.Close()
 
-		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, 0, 0)
+		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, 0, 0, true)
 		shot, err := c.Screenshot(context.Background(), sampleTarget(uid))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(shot.PNG).NotTo(BeEmpty())
 		Expect(calls).To(Equal(1))
+	})
+
+	It("passes wake_screen: false through when configured off", func() {
+		session := startFakeConsoleMCP(true, func(args screenshotArgs) (*mcpsdk.CallToolResult, error) {
+			Expect(args.WakeScreen).To(BeFalse())
+			return imageResult(fakePNG(2, 2)), nil
+		})
+		defer session.Close()
+
+		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, 0, 0, false)
+		_, err := c.Screenshot(context.Background(), sampleTarget(uid))
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("treats an IsError tool result as unavailable", func() {
@@ -168,7 +180,7 @@ var _ = Describe("Client.Screenshot", func() {
 		})
 		defer session.Close()
 
-		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, 0, 0)
+		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, 0, 0, true)
 		_, err := c.Screenshot(context.Background(), sampleTarget(uid))
 		var te *domain.TargetError
 		Expect(errors.As(err, &te)).To(BeTrue())
@@ -181,7 +193,7 @@ var _ = Describe("Client.Screenshot", func() {
 		})
 		defer session.Close()
 
-		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, 0, 0)
+		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, 0, 0, true)
 		_, err := c.Screenshot(context.Background(), sampleTarget(uid))
 		var te *domain.TargetError
 		Expect(errors.As(err, &te)).To(BeTrue())
@@ -195,7 +207,7 @@ var _ = Describe("Client.Screenshot", func() {
 		})
 		defer session.Close()
 
-		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, int64(len(png)-1), 0)
+		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, int64(len(png)-1), 0, true)
 		_, err := c.Screenshot(context.Background(), sampleTarget(uid))
 		var te *domain.TargetError
 		Expect(errors.As(err, &te)).To(BeTrue())
@@ -208,7 +220,7 @@ var _ = Describe("Client.Screenshot", func() {
 		})
 		defer session.Close()
 
-		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, 0, 50)
+		c := newClientFromSession(session, fakeIdentityReader{vmi: eligibleVMI(uid, "node-1")}, 0, 50, true)
 		_, err := c.Screenshot(context.Background(), sampleTarget(uid))
 		var te *domain.TargetError
 		Expect(errors.As(err, &te)).To(BeTrue())

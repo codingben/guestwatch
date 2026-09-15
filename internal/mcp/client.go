@@ -29,6 +29,7 @@ type ClientConfig struct {
 	ConsoleURL     string
 	MaxImageBytes  int64
 	MaxImagePixels int64
+	WakeScreen     bool
 }
 
 type Client struct {
@@ -36,6 +37,7 @@ type Client struct {
 	identity       IdentityReader
 	maxImageBytes  int64
 	maxImagePixels int64
+	wakeScreen     bool
 }
 
 func NewClient(ctx context.Context, cfg ClientConfig, identity IdentityReader) (*Client, error) {
@@ -48,7 +50,7 @@ func NewClient(ctx context.Context, cfg ClientConfig, identity IdentityReader) (
 		return nil, fmt.Errorf("mcp: connect to console MCP: %w", err)
 	}
 
-	c := newClientFromSession(session, identity, cfg.MaxImageBytes, cfg.MaxImagePixels)
+	c := newClientFromSession(session, identity, cfg.MaxImageBytes, cfg.MaxImagePixels, cfg.WakeScreen)
 	if err := c.ValidateCapabilities(ctx); err != nil {
 		session.Close()
 		return nil, err
@@ -56,12 +58,13 @@ func NewClient(ctx context.Context, cfg ClientConfig, identity IdentityReader) (
 	return c, nil
 }
 
-func newClientFromSession(session *mcpsdk.ClientSession, identity IdentityReader, maxImageBytes, maxImagePixels int64) *Client {
+func newClientFromSession(session *mcpsdk.ClientSession, identity IdentityReader, maxImageBytes, maxImagePixels int64, wakeScreen bool) *Client {
 	return &Client{
 		session:        session,
 		identity:       identity,
 		maxImageBytes:  maxImageBytes,
 		maxImagePixels: maxImagePixels,
+		wakeScreen:     wakeScreen,
 	}
 }
 
@@ -118,7 +121,7 @@ func (c *Client) callScreenshotTool(ctx context.Context, target domain.Target) (
 	args := map[string]any{
 		"namespace":   target.Namespace,
 		"name":        target.Name,
-		"wake_screen": true,
+		"wake_screen": c.wakeScreen,
 	}
 
 	result, err := c.session.CallTool(ctx, &mcpsdk.CallToolParams{Name: screenshotToolName, Arguments: args})

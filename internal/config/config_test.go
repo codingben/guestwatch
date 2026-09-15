@@ -122,4 +122,22 @@ var _ = Describe("config.Load", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.Dashboard.StaticDir).To(Equal("/custom/ui"))
 	})
+
+	It("defaults mcp.wakeScreen to true when unset", func() {
+		cfg, err := config.Load(strings.NewReader(validYAML))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.MCP.WakeScreen).NotTo(BeNil())
+		Expect(*cfg.MCP.WakeScreen).To(BeTrue())
+	})
+
+	It("accepts an explicit mcp.wakeScreen: false", func() {
+		yaml := strings.Replace(validYAML,
+			`consoleURL: "https://kubevirt-console-mcp:8443/mcp"`,
+			"consoleURL: \"https://kubevirt-console-mcp:8443/mcp\"\n  wakeScreen: false",
+			1)
+		cfg, err := config.Load(strings.NewReader(yaml))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.MCP.WakeScreen).NotTo(BeNil())
+		Expect(*cfg.MCP.WakeScreen).To(BeFalse())
+	})
 })

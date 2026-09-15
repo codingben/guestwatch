@@ -68,11 +68,22 @@ data:
       kubeAPIQPS: 5
       kubeAPIBurst: 10
     mcp:
+      #
       # Plaintext HTTP is only allowed for loopback hosts (see
       # config.Validate): this call never leaves the Pod's network
       # namespace, so TLS termination on the sidecar would add complexity
       # without a real confidentiality benefit.
+      #
       consoleURL: "http://127.0.0.1:8081/mcp"
+      #
+      # KubeVirt wakes the guest's screen before capturing it; a sleeping console
+      # otherwise produces a blank, unreadable screenshot. Set to false if
+      # waking the guest is itself undesirable for your workload.
+      #
+      # This is still remains read-only: It does not send any input to the guest,
+      # it only wakes the screen before KubeVirt captures it.
+      #
+      wakeScreen: true
     model:
       classifier: "${MODEL_ID}"
     privacy:
