@@ -93,11 +93,21 @@ func buildServices(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 	}
 
 	openaiClient := openai.NewClient(option.WithMaxRetries(0))
-	classifier, err := model.NewOpenAI(model.OpenAIConfig{
+	openAIConfig := model.OpenAIConfig{
 		ClassifierModel:    cfg.Model.Classifier,
 		RequestsPerSecond:  cfg.Scan.ClassifierRPS,
 		ConcurrentRequests: cfg.Scan.ClassifierConcurrency,
-	}, openaiClient)
+	}
+
+	if cfg.Triage.Enabled {
+		openAIConfig.TriageModel = cfg.Triage.Model
+		openAIConfig.TriageRequestsPerSecond = cfg.Triage.RPS
+		openAIConfig.TriageConcurrentRequests = cfg.Triage.Concurrency
+		openAIConfig.TriageMaxToolCalls = cfg.Triage.MaxToolCalls
+		openAIConfig.TriageTimeout = cfg.Triage.Deadline
+	}
+
+	classifier, err := model.NewOpenAI(openAIConfig, openaiClient)
 	if err != nil {
 		return nil, nil, fmt.Errorf("build classifier: %w", err)
 	}
@@ -106,7 +116,9 @@ func buildServices(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		ConsoleURL:     cfg.MCP.ConsoleURL,
 		MaxImageBytes:  mcp.DefaultMaxImageBytes,
 		MaxImagePixels: mcp.DefaultMaxImagePixels,
+		MaxTextBytes:   mcp.DefaultMaxTextBytes,
 		WakeScreen:     *cfg.MCP.WakeScreen,
+		TriageEnabled:  cfg.Triage.Enabled,
 	}, identityReader{client: virtClient})
 	if err != nil {
 		return nil, nil, fmt.Errorf("build console MCP client: %w", err)
@@ -124,7 +136,13 @@ func buildServices(ctx context.Context, cfg config.Config, logger *slog.Logger) 
 		return nil, nil, fmt.Errorf("build scanner: %w", err)
 	}
 
-	return scanner, dashboard.NewServer(cfg.Dashboard.Addr, cfg.Dashboard.StaticDir, store, logger), nil
+	dashboardServer := dashboard.NewServer(cfg.Dashboard.Addr, cfg.Dashboard.StaticDir, store, logger)
+
+	if cfg.Triage.Enabled {
+		dashboardServer.EnableTriage(classifier, console, cfg.Triage.Deadline, cfg.Triage.Concurrency)
+	}
+
+	return scanner, dashboardServer, nil
 }
 
 func isShutdownErr(err error) bool {

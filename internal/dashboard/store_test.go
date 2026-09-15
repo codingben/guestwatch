@@ -153,6 +153,64 @@ var _ = Describe("Store", func() {
 		Expect(store.Snapshot().Observations).To(HaveLen(1))
 	})
 
+	It("Get reports false for a VMI that was never recorded", func() {
+		store := dashboard.NewStore(10)
+		_, ok := store.Get("ns-a", "vmi-1")
+		Expect(ok).To(BeFalse())
+	})
+
+	It("Get returns a copy of the recorded entry", func() {
+		store := dashboard.NewStore(10)
+		now := time.Now()
+		store.RecordObservation(classifiedObservation("ns-a", "vmi-1", now))
+
+		entry, ok := store.Get("ns-a", "vmi-1")
+		Expect(ok).To(BeTrue())
+		Expect(entry.Namespace).To(Equal("ns-a"))
+		Expect(entry.Name).To(Equal("vmi-1"))
+	})
+
+	It("SetTriage attaches a triage record to an existing entry", func() {
+		store := dashboard.NewStore(10)
+		now := time.Now()
+		store.RecordObservation(classifiedObservation("ns-a", "vmi-1", now))
+
+		store.SetTriage("ns-a", "vmi-1", domain.TriageRecord{
+			Namespace: "ns-a",
+			Name:      "vmi-1",
+			Result:    &domain.TriageResult{SuspectedCause: domain.CauseKernelPanic, Confidence: domain.ConfidenceHigh},
+		})
+
+		snap := store.Snapshot()
+		Expect(snap.Observations).To(HaveLen(1))
+		Expect(snap.Observations[0].LastTriage).NotTo(BeNil())
+		Expect(snap.Observations[0].LastTriage.Result.SuspectedCause).To(Equal(domain.CauseKernelPanic))
+	})
+
+	It("SetTriage is a no-op when the entry does not exist", func() {
+		store := dashboard.NewStore(10)
+		store.SetTriage("ns-a", "vmi-1", domain.TriageRecord{Namespace: "ns-a", Name: "vmi-1"})
+
+		Expect(store.Snapshot().Observations).To(BeEmpty())
+	})
+
+	It("clone deep-copies LastTriage so a snapshot shares no memory with the live store", func() {
+		store := dashboard.NewStore(10)
+		now := time.Now()
+		store.RecordObservation(classifiedObservation("ns-a", "vmi-1", now))
+		store.SetTriage("ns-a", "vmi-1", domain.TriageRecord{
+			Namespace: "ns-a",
+			Name:      "vmi-1",
+			Result:    &domain.TriageResult{SuspectedCause: domain.CauseKernelPanic, Confidence: domain.ConfidenceHigh},
+		})
+
+		snap := store.Snapshot()
+		snap.Observations[0].LastTriage.Result.SuspectedCause = domain.CauseGuestHung
+
+		fresh := store.Snapshot()
+		Expect(fresh.Observations[0].LastTriage.Result.SuspectedCause).To(Equal(domain.CauseKernelPanic))
+	})
+
 	It("does not panic under concurrent reads and writes", func() {
 		store := dashboard.NewStore(50)
 		var wg sync.WaitGroup

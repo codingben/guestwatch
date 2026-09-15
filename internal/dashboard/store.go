@@ -24,11 +24,15 @@ type Entry struct {
 	UpdatedAt          time.Time           `json:"updatedAt"`
 	LastClassification *domain.Observation `json:"lastClassification,omitempty"`
 	LastFailure        *domain.Observation `json:"lastFailure,omitempty"`
+
+	// Only Server.handleTriage sets this; the scan loop never does.
+	LastTriage *domain.TriageRecord `json:"lastTriage,omitempty"`
 }
 
 type Snapshot struct {
-	LastScan     *domain.ScanRecord `json:"lastScan"`
-	Observations []Entry            `json:"observations"`
+	LastScan      *domain.ScanRecord `json:"lastScan"`
+	Observations  []Entry            `json:"observations"`
+	TriageEnabled bool               `json:"triageEnabled"`
 }
 
 type Store struct {
@@ -79,6 +83,30 @@ func (s *Store) RecordScan(rec domain.ScanRecord) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.lastScan = &rec
+}
+
+func (s *Store) Get(namespace, name string) (Entry, bool) {
+	key := domain.VMIKey(namespace, name)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	e, ok := s.byVMI[key]
+	if !ok {
+		return Entry{}, false
+	}
+	return e.clone(), true
+}
+
+func (s *Store) SetTriage(namespace, name string, rec domain.TriageRecord) {
+	key := domain.VMIKey(namespace, name)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if e, ok := s.byVMI[key]; ok {
+		e.LastTriage = &rec
+	}
 }
 
 func (s *Store) Prune(listedNamespaces []string, live map[string]struct{}) {
@@ -136,6 +164,14 @@ func (e *Entry) clone() Entry {
 	if e.LastFailure != nil {
 		obs := *e.LastFailure
 		c.LastFailure = &obs
+	}
+	if e.LastTriage != nil {
+		rec := *e.LastTriage
+		if e.LastTriage.Result != nil {
+			result := *e.LastTriage.Result
+			rec.Result = &result
+		}
+		c.LastTriage = &rec
 	}
 	return c
 }

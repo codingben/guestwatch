@@ -16,6 +16,7 @@ const (
 	StageDiscovery  Stage = "DISCOVERY"
 	StageScreenshot Stage = "SCREENSHOT"
 	StageClassifier Stage = "CLASSIFIER"
+	StageTriage     Stage = "TRIAGE"
 )
 
 // ErrorCode is a bounded, loggable classification of a failure. It is never
@@ -31,6 +32,7 @@ const (
 	ErrMalformedResponse ErrorCode = "MALFORMED_RESPONSE"
 	ErrEvidenceLimit     ErrorCode = "EVIDENCE_LIMIT"
 	ErrListExpired       ErrorCode = "LIST_EXPIRED"
+	ErrCancelled         ErrorCode = "CANCELLED"
 )
 
 // Classification is the model's four-state verdict for one screenshot.
@@ -184,4 +186,77 @@ func Eligible(vmi *kubevirtv1.VirtualMachineInstance) bool {
 // format for pruning of deleted VMIs to work.
 func VMIKey(namespace, name string) string {
 	return namespace + "/" + name
+}
+
+// TriageTool names one of the three read-only Console MCP tools the triage
+// model may call.
+type TriageTool string
+
+const (
+	ToolConsoleScreenshot TriageTool = "console_screenshot"
+	ToolConsoleLog        TriageTool = "console_log"
+	ToolConsoleCapture    TriageTool = "console_capture"
+)
+
+// SuspectedCause is the triage model's judgment of what most likely
+// explains the VM's state.
+type SuspectedCause string
+
+const (
+	CauseKernelPanic    SuspectedCause = "KERNEL_PANIC"
+	CauseWindowsBSOD    SuspectedCause = "WINDOWS_BSOD"
+	CauseBootFailure    SuspectedCause = "BOOT_FAILURE"
+	CauseStorageFailure SuspectedCause = "STORAGE_FAILURE"
+	CauseOutOfMemory    SuspectedCause = "OUT_OF_MEMORY"
+	CauseGuestHung      SuspectedCause = "GUEST_HUNG"
+	CauseNoFailureFound SuspectedCause = "NO_FAILURE_FOUND"
+	CauseIndeterminate  SuspectedCause = "INDETERMINATE"
+)
+
+// Confidence is the triage model's self-assessed confidence in its
+// SuspectedCause.
+type Confidence string
+
+const (
+	ConfidenceLow    Confidence = "LOW"
+	ConfidenceMedium Confidence = "MEDIUM"
+	ConfidenceHigh   Confidence = "HIGH"
+)
+
+// TriageRequest is the input to a triage investigation.
+type TriageRequest struct {
+	Target             Target
+	Classification     Classification
+	ReasonCode         ReasonCode
+	ClassificationTime time.Time
+}
+
+// TriageResult is the triage model's structured investigation output.
+// Every text field is length-bounded by the caller before it is stored or
+// rendered, since it is derived from untrusted guest-controlled console
+// output.
+type TriageResult struct {
+	SuspectedCause SuspectedCause `json:"suspectedCause"`
+	Confidence     Confidence     `json:"confidence"`
+	Summary        string         `json:"summary"`
+	KeyEvidence    []string       `json:"keyEvidence"`
+	NextSteps      []string       `json:"nextSteps"`
+
+	// Filled in by the tool loop from what it actually observed, not from
+	// the model's own claims.
+	ToolsUsed     []TriageTool `json:"toolsUsed"`
+	ToolCallCount int          `json:"toolCallCount"`
+}
+
+// TriageRecord is one on-demand investigation, attached to the store
+// Entry for the VM it investigated.
+type TriageRecord struct {
+	Namespace   string        `json:"namespace"`
+	Name        string        `json:"name"`
+	UID         types.UID     `json:"uid"`
+	RequestedAt time.Time     `json:"requestedAt"`
+	DurationMS  int64         `json:"durationMs"`
+	Result      *TriageResult `json:"result,omitempty"`
+	ErrorCode   ErrorCode     `json:"errorCode,omitempty"`
+	Usage       Usage         `json:"usage"`
 }

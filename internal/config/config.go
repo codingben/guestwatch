@@ -52,6 +52,14 @@ const (
 	DefaultDashboardStaticDir = "/opt/guestwatch/ui"
 )
 
+// Defaults for the on-demand triage investigation (see TriageConfig).
+const (
+	DefaultTriageMaxToolCalls = 8
+	DefaultTriageDeadline     = 90 * time.Second
+	DefaultTriageRPS          = 0.5
+	DefaultTriageConcurrency  = 2
+)
+
 // ScanConfig controls discovery, scheduling, and capacity.
 type ScanConfig struct {
 	Namespaces         []string      `yaml:"namespaces"`
@@ -87,6 +95,20 @@ type ModelConfig struct {
 
 type PrivacyConfig struct {
 	ConsoleEvidenceEgressAcknowledged bool `yaml:"consoleEvidenceEgressAcknowledged"`
+	TriageEvidenceEgressAcknowledged  bool `yaml:"triageEvidenceEgressAcknowledged"`
+}
+
+type TriageConfig struct {
+	Enabled      bool          `yaml:"enabled"`
+	Model        string        `yaml:"model"`
+	MaxToolCalls int           `yaml:"maxToolCalls"`
+	Deadline     time.Duration `yaml:"deadline"`
+
+	// RPS and Concurrency are independent of scan.classifierRPS/
+	// classifierConcurrency, so a burst of investigations can't threaten
+	// scan.firstPassDeadline.
+	RPS         float64 `yaml:"rps"`
+	Concurrency int     `yaml:"concurrency"`
 }
 
 type DashboardConfig struct {
@@ -104,6 +126,7 @@ type Config struct {
 	Model     ModelConfig     `yaml:"model"`
 	Privacy   PrivacyConfig   `yaml:"privacy"`
 	Dashboard DashboardConfig `yaml:"dashboard"`
+	Triage    TriageConfig    `yaml:"triage"`
 }
 
 func Load(r io.Reader) (Config, error) {
@@ -155,6 +178,19 @@ func (c *Config) applyDefaults() {
 	if c.MCP.WakeScreen == nil {
 		wakeScreen := true
 		c.MCP.WakeScreen = &wakeScreen
+	}
+
+	if c.Triage.MaxToolCalls == 0 {
+		c.Triage.MaxToolCalls = DefaultTriageMaxToolCalls
+	}
+	if c.Triage.Deadline == 0 {
+		c.Triage.Deadline = DefaultTriageDeadline
+	}
+	if c.Triage.RPS == 0 {
+		c.Triage.RPS = DefaultTriageRPS
+	}
+	if c.Triage.Concurrency == 0 {
+		c.Triage.Concurrency = DefaultTriageConcurrency
 	}
 }
 
@@ -215,12 +251,16 @@ func (c Config) Validate() error {
 	if c.Model.Classifier == "" {
 		return fmt.Errorf("model.classifier must not be empty")
 	}
-	if strings.EqualFold(c.Model.Classifier, requiredModelSentinel) || strings.HasPrefix(strings.ToUpper(c.Model.Classifier), "REQUIRED_") {
+	if isRequiredPlaceholder(c.Model.Classifier) {
 		return fmt.Errorf("model.classifier must be set to a real model ID, not a REQUIRED_ placeholder")
 	}
 
 	if !c.Privacy.ConsoleEvidenceEgressAcknowledged {
 		return fmt.Errorf("privacy.consoleEvidenceEgressAcknowledged must be true: screenshots leave the cluster for the configured model provider")
+	}
+
+	if err := c.Triage.Validate(c.Privacy); err != nil {
+		return err
 	}
 
 	if c.Dashboard.Addr != "" {
@@ -241,4 +281,39 @@ func isLoopbackHost(host string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+func isRequiredPlaceholder(id string) bool {
+	return strings.EqualFold(id, requiredModelSentinel) || strings.HasPrefix(strings.ToUpper(id), "REQUIRED_")
+}
+
+// Validate is a no-op when triage is disabled: an operator can leave the
+// block out of their config entirely.
+func (t TriageConfig) Validate(privacy PrivacyConfig) error {
+	if !t.Enabled {
+		return nil
+	}
+
+	if t.Model == "" {
+		return fmt.Errorf("triage.model must not be empty when triage.enabled is true")
+	}
+	if isRequiredPlaceholder(t.Model) {
+		return fmt.Errorf("triage.model must be set to a real model ID, not a REQUIRED_ placeholder")
+	}
+	if t.MaxToolCalls < 1 || t.MaxToolCalls > 30 {
+		return fmt.Errorf("triage.maxToolCalls must be between 1 and 30")
+	}
+	if t.Deadline <= 0 {
+		return fmt.Errorf("triage.deadline must be positive")
+	}
+	if t.RPS <= 0 {
+		return fmt.Errorf("triage.rps must be positive")
+	}
+	if t.Concurrency < 1 {
+		return fmt.Errorf("triage.concurrency must be at least 1")
+	}
+	if !privacy.TriageEvidenceEgressAcknowledged {
+		return fmt.Errorf("privacy.triageEvidenceEgressAcknowledged must be true: triage sends console screenshots and serial-console text to the configured model provider")
+	}
+	return nil
 }

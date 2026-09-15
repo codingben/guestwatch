@@ -36,7 +36,7 @@ Each scan interval, the agent runs this pipeline:
    JSON. A `scan_complete` summary line closes out every scan with counts
    and token usage.
 
-## Configure
+### Scan Configuration
 
 ```yaml
 scan:
@@ -53,6 +53,29 @@ model:
   classifier: "your-vision-model-id"
 privacy:
   consoleEvidenceEgressAcknowledged: true
+```
+
+## Triage
+
+Triage investigates a VM using a reasoning model and the [KubeVirt Console MCP](https://github.com/codingben/kubevirt-console-mcp)'s
+read-only tools:
+
+- `console_screenshot` — graphical console.
+- `console_log` — persisted serial-console output.
+- `console_capture` — live serial-console output (≤30s).
+
+### Triage Configuration
+
+```yaml
+triage:
+  enabled: true
+  model: "your-reasoning-model-id"
+  maxToolCalls: 8
+  deadline: 90s
+  rps: 0.5
+  concurrency: 2
+privacy:
+  triageEvidenceEgressAcknowledged: true
 ```
 
 ## License

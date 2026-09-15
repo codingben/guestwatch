@@ -25,6 +25,20 @@ rules:
   - apiGroups: ["subresources.kubevirt.io"]
     resources: ["virtualmachineinstances/vnc/screenshot"]
     verbs: ["get"]
+  # Exercised only when Triage.Enabled is true (see the
+  # ConfigMap); granted unconditionally so enabling triage is config-only.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"] # console_log: locate the VM's virt-launcher pod.
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"] # console_log: read its guest-console-log container.
+  # console_capture opens a live serial console. This subresource CAN send
+  # guest input at the API level; read-only-ness is enforced by
+  # kubevirt-console-mcp's own code, not by this Role.
+  - apiGroups: ["subresources.kubevirt.io"]
+    resources: ["virtualmachineinstances/console"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -88,8 +102,20 @@ data:
       classifier: "${MODEL_ID}"
     privacy:
       consoleEvidenceEgressAcknowledged: true
+      # Uncomment together with the triage: block below; triage also ships
+      # serial-console text to the model provider, not just screenshots.
+      # triageEvidenceEgressAcknowledged: true
     dashboard:
       maxObservations: 10000
+    # Triage is an on-demand, tool-calling investigation of one VM,
+    # triggered from the dashboard's Investigate button.
+    # triage:
+    #   enabled: true
+    #   model: "${TRIAGE_MODEL_ID}" # a tool-calling reasoning model, not model.classifier's vision model.
+    #   maxToolCalls: 8
+    #   deadline: 90s
+    #   rps: 0.5
+    #   concurrency: 2
 ---
 apiVersion: apps/v1
 kind: Deployment

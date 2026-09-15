@@ -140,4 +140,63 @@ var _ = Describe("config.Load", func() {
 		Expect(cfg.MCP.WakeScreen).NotTo(BeNil())
 		Expect(*cfg.MCP.WakeScreen).To(BeFalse())
 	})
+
+	It("leaves triage disabled by default and skips its validation entirely", func() {
+		cfg, err := config.Load(strings.NewReader(validYAML))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Triage.Enabled).To(BeFalse())
+		// Defaults still apply even though triage is off.
+		Expect(cfg.Triage.MaxToolCalls).To(Equal(config.DefaultTriageMaxToolCalls))
+		Expect(cfg.Triage.Deadline).To(Equal(config.DefaultTriageDeadline))
+		Expect(cfg.Triage.RPS).To(Equal(config.DefaultTriageRPS))
+		Expect(cfg.Triage.Concurrency).To(Equal(config.DefaultTriageConcurrency))
+	})
+
+	// Extends validYAML's existing privacy mapping rather than adding a
+	// second "privacy:" key, which yaml.v3 rejects as a duplicate.
+	validTriageYAML := strings.Replace(validYAML,
+		"consoleEvidenceEgressAcknowledged: true",
+		"consoleEvidenceEgressAcknowledged: true\n  triageEvidenceEgressAcknowledged: true",
+		1,
+	) + "triage:\n  enabled: true\n  model: \"gpt-reasoning-1\"\n"
+
+	It("accepts a fully valid enabled triage block and applies its capacity defaults", func() {
+		cfg, err := config.Load(strings.NewReader(validTriageYAML))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Triage.Enabled).To(BeTrue())
+		Expect(cfg.Triage.Model).To(Equal("gpt-reasoning-1"))
+		Expect(cfg.Triage.MaxToolCalls).To(Equal(config.DefaultTriageMaxToolCalls))
+		Expect(cfg.Triage.Deadline).To(Equal(config.DefaultTriageDeadline))
+		Expect(cfg.Triage.RPS).To(Equal(config.DefaultTriageRPS))
+		Expect(cfg.Triage.Concurrency).To(Equal(config.DefaultTriageConcurrency))
+	})
+
+	It("rejects enabled triage without an egress acknowledgement distinct from the console one", func() {
+		yaml := validYAML + "\ntriage:\n  enabled: true\n  model: \"gpt-reasoning-1\"\n"
+		_, err := config.Load(strings.NewReader(yaml))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("triageEvidenceEgressAcknowledged"))
+	})
+
+	DescribeTable("rejects an invalid enabled triage block",
+		func(yaml string) {
+			_, err := config.Load(strings.NewReader(yaml))
+			Expect(err).To(HaveOccurred())
+		},
+		Entry("empty model", strings.Replace(validTriageYAML, `model: "gpt-reasoning-1"`, `model: ""`, 1)),
+		Entry("REQUIRED_ placeholder model", strings.Replace(validTriageYAML, `model: "gpt-reasoning-1"`, `model: "REQUIRED_MODEL_ID"`, 1)),
+		// 0 is indistinguishable from "unset" once applyDefaults runs, so
+		// these use negative/out-of-range values instead.
+		Entry("negative maxToolCalls", validTriageYAML+"  maxToolCalls: -1\n"),
+		Entry("maxToolCalls too high", validTriageYAML+"  maxToolCalls: 31\n"),
+		Entry("negative deadline", validTriageYAML+"  deadline: -1s\n"),
+		Entry("negative rps", validTriageYAML+"  rps: -1\n"),
+		Entry("negative concurrency", validTriageYAML+"  concurrency: -1\n"),
+	)
+
+	It("does not require a triage block to be present at all", func() {
+		Expect(strings.Contains(validYAML, "triage:")).To(BeFalse())
+		_, err := config.Load(strings.NewReader(validYAML))
+		Expect(err).NotTo(HaveOccurred())
+	})
 })
