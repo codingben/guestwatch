@@ -558,11 +558,11 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <section className="dashboard" aria-label="Guest Watchdog dashboard">
+      <section className="dashboard" aria-label="GuestWatch AI dashboard">
         <header className="toolbar">
           <span className="brand">
             <MonitorIcon />
-            <h1 className="brand-title">Guest Watchdog</h1>
+            <h1 className="brand-title">GuestWatch AI</h1>
           </span>
           {data && <ScanSummary lastScan={data.lastScan} suspectedNow={suspectedNow} />}
         </header>
