@@ -22,7 +22,7 @@ const pendingTriage = new Map();
 
 function mockApiPlugin() {
   return {
-    name: "guestwatch-mock-api",
+    name: "kubevirt-ai-agent-mock-api",
     configureServer(server) {
       if (process.env.VITE_MOCK !== "true") return;
 

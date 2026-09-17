@@ -128,7 +128,7 @@ var _ = Describe("Server", func() {
 
 	It("serves the built frontend from staticDir when configured", func() {
 		dir := GinkgoT().TempDir()
-		Expect(os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>guestwatch</h1>"), 0o644)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>kubevirt-ai-agent</h1>"), 0o644)).To(Succeed())
 		assetsDir := filepath.Join(dir, "assets")
 		Expect(os.Mkdir(assetsDir, 0o755)).To(Succeed())
 		Expect(os.WriteFile(filepath.Join(assetsDir, "app.js"), []byte("console.log('ui')"), 0o644)).To(Succeed())
@@ -144,7 +144,7 @@ var _ = Describe("Server", func() {
 		Expect(root.StatusCode).To(Equal(http.StatusOK))
 		body, err := io.ReadAll(root.Body)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(string(body)).To(ContainSubstring("guestwatch"))
+		Expect(string(body)).To(ContainSubstring("kubevirt-ai-agent"))
 
 		asset, err := http.Get(ts.URL + "/assets/app.js")
 		Expect(err).NotTo(HaveOccurred())
@@ -165,7 +165,7 @@ var _ = Describe("Server", func() {
 
 	It("404s every UI route when staticDir does not exist, without affecting the API", func() {
 		store := dashboard.NewStore(10)
-		srv := dashboard.NewServer(":0", "/nonexistent-guestwatch-ui-dir", store, discardLogger())
+		srv := dashboard.NewServer(":0", "/nonexistent-kubevirt-ai-agent-ui-dir", store, discardLogger())
 		ts := httptest.NewServer(srv.Handler())
 		defer ts.Close()
 
@@ -182,7 +182,7 @@ var _ = Describe("Server", func() {
 
 	It("404s a static subdirectory without index.html instead of listing its contents", func() {
 		dir := GinkgoT().TempDir()
-		Expect(os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>guestwatch</h1>"), 0o644)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>kubevirt-ai-agent</h1>"), 0o644)).To(Succeed())
 		assetsDir := filepath.Join(dir, "assets")
 		Expect(os.Mkdir(assetsDir, 0o755)).To(Succeed())
 		Expect(os.WriteFile(filepath.Join(assetsDir, "app-abc123.js"), []byte("x"), 0o644)).To(Succeed())
@@ -206,7 +206,7 @@ var _ = Describe("Server", func() {
 
 	It("404s an unknown /api/ path directly instead of falling through to the static handler", func() {
 		dir := GinkgoT().TempDir()
-		Expect(os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>guestwatch</h1>"), 0o644)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(dir, "index.html"), []byte("<h1>kubevirt-ai-agent</h1>"), 0o644)).To(Succeed())
 
 		store := dashboard.NewStore(10)
 		srv := dashboard.NewServer(":0", dir, store, discardLogger())
@@ -222,7 +222,7 @@ var _ = Describe("Server", func() {
 		Expect(resp.StatusCode).To(Equal(http.StatusNotFound))
 		// Not the index.html the static handler would have served for any
 		// other unmatched path.
-		Expect(string(body)).NotTo(ContainSubstring("guestwatch"))
+		Expect(string(body)).NotTo(ContainSubstring("kubevirt-ai-agent"))
 	})
 
 	It("does not register the triage route, and reports it disabled, when EnableTriage was never called", func() {
