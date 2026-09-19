@@ -3,8 +3,8 @@ package agent
 import (
 	"time"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
-	"github.com/codingben/kubevirt-ai-agent/internal/model"
+	"github.com/codingben/guestwatch/internal/domain"
+	"github.com/codingben/guestwatch/internal/model"
 )
 
 func (r *scanRun) logScanComplete() {

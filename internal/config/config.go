@@ -49,7 +49,7 @@ const DefaultKubeAPIQPS float32 = 5.0
 
 const (
 	DefaultDashboardAddr      = ":8080"
-	DefaultDashboardStaticDir = "/opt/kubevirt-ai-agent/ui"
+	DefaultDashboardStaticDir = "/opt/guestwatch/ui"
 )
 
 // Defaults for the on-demand triage investigation (see TriageConfig).

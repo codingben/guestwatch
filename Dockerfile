@@ -15,15 +15,15 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o kubevirt-ai-agent ./cmd/kubevirt-ai-agent
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -o guestwatch ./cmd/guestwatch
 
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 
-COPY --from=builder /app/kubevirt-ai-agent /usr/local/bin/kubevirt-ai-agent
-COPY --from=ui-builder /ui/dist /opt/kubevirt-ai-agent/ui
+COPY --from=builder /app/guestwatch /usr/local/bin/guestwatch
+COPY --from=ui-builder /ui/dist /opt/guestwatch/ui
 
 # Run as a non-root, numeric user so the image works under restricted
 # PodSecurity / OpenShift SCCs.
 USER 65532:65532
 
-ENTRYPOINT ["/usr/local/bin/kubevirt-ai-agent"]
+ENTRYPOINT ["/usr/local/bin/guestwatch"]

@@ -17,8 +17,8 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
-	"github.com/codingben/kubevirt-ai-agent/internal/model"
+	"github.com/codingben/guestwatch/internal/domain"
+	"github.com/codingben/guestwatch/internal/model"
 )
 
 func fakeResponseBody(outputText string) []byte {

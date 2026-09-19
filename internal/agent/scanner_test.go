@@ -16,9 +16,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/agent"
-	"github.com/codingben/kubevirt-ai-agent/internal/dashboard"
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/agent"
+	"github.com/codingben/guestwatch/internal/dashboard"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 var _ = Describe("Scanner", func() {

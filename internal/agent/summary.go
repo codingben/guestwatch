@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 type ScanSummary struct {

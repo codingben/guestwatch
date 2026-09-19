@@ -15,7 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 type screenshotArgs struct {

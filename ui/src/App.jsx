@@ -598,11 +598,11 @@ export default function App() {
 
   return (
     <main className="app-shell">
-      <section className="dashboard" aria-label="KubeVirt AI Agent dashboard">
+      <section className="dashboard" aria-label="GuestWatch dashboard">
         <header className="toolbar">
           <span className="brand">
             <MonitorIcon />
-            <h1 className="brand-title">KubeVirt AI Agent</h1>
+            <h1 className="brand-title">GuestWatch</h1>
           </span>
           {data && <ScanSummary lastScan={data.lastScan} suspectedNow={suspectedNow} />}
           <ThemeToggle theme={theme} onToggle={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))} />

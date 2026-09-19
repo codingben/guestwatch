@@ -17,8 +17,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
-	"github.com/codingben/kubevirt-ai-agent/internal/model"
+	"github.com/codingben/guestwatch/internal/domain"
+	"github.com/codingben/guestwatch/internal/model"
 )
 
 // Triager runs a bounded, tool-calling investigation of one VM.

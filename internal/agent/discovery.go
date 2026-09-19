@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"kubevirt.io/client-go/kubecli"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 type VMIClient interface {

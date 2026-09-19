@@ -12,8 +12,8 @@ import (
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"kubevirt.io/client-go/kubecli"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/config"
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/config"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 type fakeVMIInterface struct {

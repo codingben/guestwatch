@@ -8,16 +8,16 @@ const vms = [
 ];
 
 const installSteps = [
-  {title:'Prepare your model credentials',note:<>Save your API key in <code>api-key.txt</code>.</>,code:'kubectl -n images create secret generic kubevirt-ai-agent-model --from-file=api-key=./api-key.txt'},
-  {title:'Render and apply the deployment',note:<>Set <code>NAMESPACE</code> and <code>MODEL_ID</code>, then render the template before applying it.</>,code:'NAMESPACE=images MODEL_ID=your-model envsubst < deploy/kubevirt-ai-agent.yaml | kubectl apply -f -'},
-  {title:'Open the local dashboard',code:'kubectl -n images port-forward svc/kubevirt-ai-agent 8080:80',after:<>After deployment, visit <code>http://localhost:8080</code>. Viewing stored observations does not trigger an AI request.</>}
+  {title:'Prepare your model credentials',note:<>Save your API key in <code>api-key.txt</code>.</>,code:'kubectl -n images create secret generic guestwatch-model --from-file=api-key=./api-key.txt'},
+  {title:'Render and apply the deployment',note:<>Set <code>NAMESPACE</code> and <code>MODEL_ID</code>, then render the template before applying it.</>,code:'NAMESPACE=images MODEL_ID=your-model envsubst < deploy/guestwatch.yaml | kubectl apply -f -'},
+  {title:'Open the local dashboard',code:'kubectl -n images port-forward svc/guestwatch 8080:80',after:<>After deployment, visit <code>http://localhost:8080</code>. Viewing stored observations does not trigger an AI request.</>}
 ];
 
 const faqs = [
   ['Will I need cluster-admin access?','The deployment targets namespace administrators: a Deployment, Service, ConfigMap, and namespaced RBAC, with no new CRDs or cluster-wide roles. Your cluster must already provide KubeVirt, and you must be allowed to grant the required VM and console access.'],
   ['Does the dashboard need a chatbot prompt?','The dashboard shows recorded observations automatically. Periodic checks perform model analysis; viewing results does not need a new prompt or model call. Console images go to your configured model provider, and its charges apply to background checks.'],
   ['Can a still screen prove an app is frozen?','A still screen can be normal. Progress monitoring needs repeated readable captures, an expected workflow, and a timeout. The AI agent can surface suspected stalls in visible workflows; application probes or guest telemetry are needed for problems that do not appear on the console.'],
-  ['What can I use today?',<>The <a href="https://github.com/codingben/kubevirt-ai-agent">agent</a> contains periodic screenshot classification and structured logging. The <a href="https://github.com/codingben/kubevirt-console-mcp">console MCP server</a> provides read-only console evidence.</>]
+  ['What can I use today?',<>The <a href="https://github.com/codingben/guestwatch">agent</a> contains periodic screenshot classification and structured logging. The <a href="https://github.com/codingben/kubevirt-console-mcp">console MCP server</a> provides read-only console evidence.</>]
 ];
 
 function MonitorIcon({small=false}) { return <img className={small?'small-icon':'brand-icon'} src="/icon.svg" alt="" aria-hidden="true"/> }
@@ -63,7 +63,7 @@ export default function App() {
     <a className="skip" href="#main">Skip to content</a>
     <header className="site-header"><div className="container nav-wrap">
       <a className="site-brand" href="#"><MonitorIcon/>GuestWatch</a>
-      <nav aria-label="Main navigation"><a href="#preview">Preview</a><a href="#how">How it works</a><a href="#install">Install</a><a className="github" href="https://github.com/codingben/kubevirt-ai-agent"><GithubIcon/><span>GitHub</span></a><ThemeToggle theme={theme} onToggle={()=>setTheme(t=>t==='dark'?'light':'dark')}/></nav>
+      <nav aria-label="Main navigation"><a href="#preview">Preview</a><a href="#how">How it works</a><a href="#install">Install</a><a className="github" href="https://github.com/codingben/guestwatch"><GithubIcon/><span>GitHub</span></a><ThemeToggle theme={theme} onToggle={()=>setTheme(t=>t==='dark'?'light':'dark')}/></nav>
     </div></header>
     <main id="main">
       <section className="hero container"><h1>AI-powered guest monitoring<br/>for KubeVirt VMs.</h1><p>Deploy an AI agent that checks Linux and Windows console screens for signs of trouble. Spot visible crashes, follow installation progress, and monitor expected screens.</p><div className="actions"><a className="primary" href="#preview">Explore the preview →</a><a className="secondary" href="#install">YAML installation</a></div></section>

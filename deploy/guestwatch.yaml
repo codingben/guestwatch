@@ -1,23 +1,23 @@
 # Render this file before applying it:
-#   NAMESPACE=my-vm-namespace MODEL_ID=your-model envsubst < deploy/kubevirt-ai-agent.yaml | kubectl apply -f -
+#   NAMESPACE=my-vm-namespace MODEL_ID=your-model envsubst < deploy/guestwatch.yaml | kubectl apply -f -
 #
 # The console sidecar is reachable only inside this Pod. The AI agent and the
 # dashboard are the only components exposed through the Service.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: kubevirt-ai-agent
+  name: guestwatch
   namespace: ${NAMESPACE}
   labels:
-    app.kubernetes.io/name: kubevirt-ai-agent
+    app.kubernetes.io/name: guestwatch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: kubevirt-ai-agent
+  name: guestwatch
   namespace: ${NAMESPACE}
   labels:
-    app.kubernetes.io/name: kubevirt-ai-agent
+    app.kubernetes.io/name: guestwatch
 rules:
   - apiGroups: ["kubevirt.io"]
     resources: ["virtualmachineinstances"]
@@ -43,26 +43,26 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: kubevirt-ai-agent
+  name: guestwatch
   namespace: ${NAMESPACE}
   labels:
-    app.kubernetes.io/name: kubevirt-ai-agent
+    app.kubernetes.io/name: guestwatch
 subjects:
   - kind: ServiceAccount
-    name: kubevirt-ai-agent
+    name: guestwatch
     namespace: ${NAMESPACE}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: kubevirt-ai-agent
+  name: guestwatch
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: kubevirt-ai-agent
+  name: guestwatch
   namespace: ${NAMESPACE}
   labels:
-    app.kubernetes.io/name: kubevirt-ai-agent
+    app.kubernetes.io/name: guestwatch
 data:
   config.yaml: |
     scan:
@@ -120,37 +120,37 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kubevirt-ai-agent
+  name: guestwatch
   namespace: ${NAMESPACE}
   labels:
-    app.kubernetes.io/name: kubevirt-ai-agent
+    app.kubernetes.io/name: guestwatch
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: kubevirt-ai-agent
+      app.kubernetes.io/name: guestwatch
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: kubevirt-ai-agent
+        app.kubernetes.io/name: guestwatch
     spec:
-      serviceAccountName: kubevirt-ai-agent
+      serviceAccountName: guestwatch
       securityContext:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       containers:
         - name: agent
-          image: ghcr.io/codingben/kubevirt-ai-agent:latest
+          image: ghcr.io/codingben/guestwatch:latest
           imagePullPolicy: IfNotPresent
           args:
             - -config
-            - /etc/kubevirt-ai-agent/config.yaml
+            - /etc/guestwatch/config.yaml
           env:
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: kubevirt-ai-agent-model
+                  name: guestwatch-model
                   key: api-key
           ports:
             - name: http
@@ -158,7 +158,7 @@ spec:
               protocol: TCP
           volumeMounts:
             - name: config
-              mountPath: /etc/kubevirt-ai-agent
+              mountPath: /etc/guestwatch
               readOnly: true
           resources:
             requests:
@@ -192,18 +192,18 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: kubevirt-ai-agent
+            name: guestwatch
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: kubevirt-ai-agent
+  name: guestwatch
   namespace: ${NAMESPACE}
   labels:
-    app.kubernetes.io/name: kubevirt-ai-agent
+    app.kubernetes.io/name: guestwatch
 spec:
   selector:
-    app.kubernetes.io/name: kubevirt-ai-agent
+    app.kubernetes.io/name: guestwatch
   ports:
     - name: http
       port: 80

@@ -13,7 +13,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 const (
@@ -62,7 +62,7 @@ type Client struct {
 }
 
 func NewClient(ctx context.Context, cfg ClientConfig, identity IdentityReader) (*Client, error) {
-	impl := &mcpsdk.Implementation{Name: "kubevirt-ai-agent", Version: "0.1.0"}
+	impl := &mcpsdk.Implementation{Name: "guestwatch", Version: "0.1.0"}
 	sdkClient := mcpsdk.NewClient(impl, nil)
 	transport := &mcpsdk.StreamableClientTransport{Endpoint: cfg.ConsoleURL}
 
@@ -233,7 +233,7 @@ func (c *Client) boundText(text string) string {
 	if c.maxTextBytes <= 0 || int64(len(text)) <= c.maxTextBytes {
 		return text
 	}
-	return truncateUTF8(text, c.maxTextBytes) + "\n[truncated by kubevirt-ai-agent after exceeding the configured text limit]"
+	return truncateUTF8(text, c.maxTextBytes) + "\n[truncated by guestwatch after exceeding the configured text limit]"
 }
 
 func truncateUTF8(s string, max int64) string {

@@ -14,7 +14,7 @@ import (
 	"github.com/openai/openai-go/v3/shared"
 	"golang.org/x/time/rate"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 const (

@@ -13,8 +13,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/agent"
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/agent"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 var _ = Describe("agent.ListTargets", func() {

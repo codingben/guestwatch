@@ -6,7 +6,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/config"
+	"github.com/codingben/guestwatch/internal/config"
 )
 
 const validYAML = `

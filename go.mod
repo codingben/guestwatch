@@ -1,4 +1,4 @@
-module github.com/codingben/kubevirt-ai-agent
+module github.com/codingben/guestwatch
 
 go 1.26.2
 

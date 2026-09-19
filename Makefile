@@ -1,8 +1,8 @@
-BINARY_NAME    ?= kubevirt-ai-agent
-CMD_PATH       := ./cmd/kubevirt-ai-agent
+BINARY_NAME    ?= guestwatch
+CMD_PATH       := ./cmd/guestwatch
 CONTAINER_TOOL ?= docker
 IMAGE_REGISTRY ?= ghcr.io/codingben
-IMAGE_NAME     ?= kubevirt-ai-agent
+IMAGE_NAME     ?= guestwatch
 IMAGE_TAG      ?= latest
 IMAGE          := $(IMAGE_REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
 

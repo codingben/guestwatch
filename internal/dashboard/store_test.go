@@ -7,8 +7,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/dashboard"
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/dashboard"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 func classifiedObservation(namespace, name string, observedAt time.Time) domain.Observation {

@@ -19,11 +19,11 @@ import (
 	"github.com/openai/openai-go/v3/option"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/agent"
-	"github.com/codingben/kubevirt-ai-agent/internal/config"
-	"github.com/codingben/kubevirt-ai-agent/internal/dashboard"
-	"github.com/codingben/kubevirt-ai-agent/internal/mcp"
-	"github.com/codingben/kubevirt-ai-agent/internal/model"
+	"github.com/codingben/guestwatch/internal/agent"
+	"github.com/codingben/guestwatch/internal/config"
+	"github.com/codingben/guestwatch/internal/dashboard"
+	"github.com/codingben/guestwatch/internal/mcp"
+	"github.com/codingben/guestwatch/internal/model"
 )
 
 func main() {
@@ -34,7 +34,7 @@ func main() {
 }
 
 func run() error {
-	const defaultConfigPath = "/etc/kubevirt-ai-agent/config.yaml"
+	const defaultConfigPath = "/etc/guestwatch/config.yaml"
 
 	configPath := flag.String("config", defaultConfigPath, "path to the scan configuration file")
 	flag.Parse()
@@ -57,7 +57,7 @@ func run() error {
 		return err
 	}
 
-	logger.Info("kubevirt-ai-agent starting",
+	logger.Info("guestwatch starting",
 		"namespaces", cfg.Scan.Namespaces,
 		"interval", cfg.Scan.Interval.String(),
 		"dashboard_addr", cfg.Dashboard.Addr,

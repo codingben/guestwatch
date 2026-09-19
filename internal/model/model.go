@@ -5,7 +5,7 @@ import (
 	"sort"
 	"unicode/utf8"
 
-	"github.com/codingben/kubevirt-ai-agent/internal/domain"
+	"github.com/codingben/guestwatch/internal/domain"
 )
 
 type Classifier interface {
